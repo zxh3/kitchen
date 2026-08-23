@@ -108,7 +108,7 @@
 	<div class="flex items-center gap-1 border-b border-neutral-800 bg-neutral-950 px-2 py-1.5">
 		<button class="px-2 py-1 hover:bg-neutral-800 rounded" title="Back" onclick={() => send({ type: "back" })}>←</button>
 		<button class="px-2 py-1 hover:bg-neutral-800 rounded" title="Forward" onclick={() => send({ type: "forward" })}>→</button>
-		<button class="px-2 py-1 hover:bg-neutral-800 rounded" title="Reload" onclick={() => send({ type: "reload" })}>⟳</button>
+		<button class="px-2 py-1 hover:bg-neutral-800 rounded" title="Reload" onclick={() => send({ type: "reload" })}>↻</button>
 		<form onsubmit={submitAddress} class="flex-1">
 			<input
 				bind:this={addrEl}
