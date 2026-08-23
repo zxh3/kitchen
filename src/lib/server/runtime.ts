@@ -211,6 +211,9 @@ printf '  without being stopped (it has a 24h lifetime). stop it when you are\n'
 printf '  done, or mount a volume for anything you cannot lose.\n\n'
 printf 'browser tab:\n'
 printf '  proxies to port 3000 in this sandbox - start any dev server there\n\n'
+printf 'images for agents:\n'
+printf '  ctrl+v or drop a file in a terminal pane - saved under /tmp/kitchen-shots,\n'
+printf '  path typed at the prompt (herdr panes), latest.png symlink. Not in snapshots.\n\n'
 printf 'tools you install later:\n'
 printf '  herdr and vscode keep the PATH they booted with, so a tool installed\n'
 printf '  after boot has to land somewhere already on it. these are:\n'
@@ -261,6 +264,18 @@ cat > /tmp/Caddyfile <<CADDYEOF
 		header Cookie *kitchen=$KITCHEN_SECRET*
 	}
 	handle @authed {
+		# screenshot paste: the patched ttyd index loads paste.js from here
+		# and POSTs clipboard/dropped images to the upload daemon; args[1]
+		# tells the daemon which pane type the page belongs to.
+		handle /kitchen-upload {
+			reverse_proxy 127.0.0.1:17009 {
+				header_up X-Kitchen-Pane {args[1]}
+			}
+		}
+		handle /kitchen-paste.js {
+			root * /etc/kitchen
+			file_server
+		}
 		reverse_proxy 127.0.0.1:{args[0]}
 	}
 	handle {
@@ -268,13 +283,13 @@ cat > /tmp/Caddyfile <<CADDYEOF
 	}
 }
 :7681 {
-	import kitchenauth 17681
+	import kitchenauth 17681 zsh
 }
 :7683 {
-	import kitchenauth 17683
+	import kitchenauth 17683 herdr
 }
 :8443 {
-	import kitchenauth 18443
+	import kitchenauth 18443 code
 }
 :8080 {
 	@login {
@@ -304,12 +319,221 @@ cat > /tmp/Caddyfile <<CADDYEOF
 }
 CADDYEOF
 
+# --- screenshot paste for terminal panes ---
+# Image paste can never travel over a terminal websocket (terminals are
+# text), so a small script injected into ttyd's page turns clipboard/drop
+# events into an HTTP upload; the upload daemon saves the file and types
+# its path into the herdr pane. The path IS the agent interface.
+mkdir -p /etc/kitchen /tmp/kitchen-shots
+cat > /etc/kitchen/kitchen-paste.js <<'PASTEJS'
+// Injected into ttyd's page (via --index, see bootScript). Turns image
+// pastes and file drops in any terminal pane into files in the sandbox:
+// the upload daemon saves them and types the path into the herdr pane.
+// Text pastes are untouched — they belong to xterm.
+(function () {
+  "use strict";
+  function toast(msg) {
+    var d = document.createElement("div");
+    d.textContent = msg;
+    d.style.cssText =
+      "position:fixed;bottom:12px;right:12px;z-index:99999;background:#1c1c1e;color:#c6f24e;border:1px solid #3a3a2e;padding:8px 12px;border-radius:6px;font:13px monospace;opacity:.95";
+    document.body.appendChild(d);
+    setTimeout(function () {
+      d.remove();
+    }, 4000);
+  }
+  function upload(file) {
+    var headers = {};
+    if (file.type) headers["x-shot-type"] = file.type;
+    fetch("/kitchen-upload", { method: "POST", headers: headers, body: file })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (res) {
+        if (!res.path) {
+          toast("upload failed: " + (res.error || "unknown"));
+          return;
+        }
+        if (res.typed) {
+          toast("> " + res.path);
+          return;
+        }
+        // Non-herdr panes (plain zsh ttyd): no send-text exists there, so
+        // put the path on the clipboard instead.
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(res.path).then(
+            function () {
+              toast("copied " + res.path);
+            },
+            function () {
+              toast(res.path);
+            },
+          );
+        } else {
+          toast(res.path);
+        }
+      })
+      .catch(function (e) {
+        toast("upload failed: " + e);
+      });
+  }
+  window.addEventListener("paste", function (e) {
+    var files = e.clipboardData && e.clipboardData.files;
+    if (!files || !files.length) return; // text paste: xterm's business
+    e.preventDefault();
+    e.stopPropagation();
+    upload(files[0]);
+  });
+  window.addEventListener("dragover", function (e) {
+    if (!e.dataTransfer || !e.dataTransfer.types) return;
+    if (e.dataTransfer.types.indexOf("Files") >= 0) e.preventDefault();
+  });
+  window.addEventListener("drop", function (e) {
+    var files = e.dataTransfer && e.dataTransfer.files;
+    if (!files || !files.length) return;
+    e.preventDefault();
+    e.stopPropagation();
+    upload(files[0]);
+  });
+})();
+PASTEJS
+cat > /etc/kitchen/upload-server.js <<'UPLOADJS'
+// kitchen screenshot upload daemon. The patched ttyd index POSTs
+// clipboard/dropped images here from the browser; we save them and, for
+// the herdr pane, type the path where it belongs.
+//
+// Auxiliary service: started under a restart loop, must never fail the
+// sandbox, and anything it cannot do degrades to a plain file save.
+"use strict";
+const http = require("node:http");
+const fs = require("node:fs");
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
+
+// /tmp stays out of kitchen snapshots on purpose: screenshots are
+// transient handoffs to an agent, not machine state.
+const DIR = "/tmp/kitchen-shots";
+const PORT = 17009;
+const MAX_BYTES = 25 * 1024 * 1024;
+const EXTS = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/gif": ".gif",
+  "image/webp": ".webp",
+};
+
+fs.mkdirSync(DIR, { recursive: true });
+
+// ctrl+v means "here": herdr's current pane is the one the user just
+// pasted in. Deliberately not gated on a pi agent — a path typed at a
+// shell prompt is just as useful. Race: if focus moved mid-upload, the
+// text follows the new focus; it is only text, nothing is submitted.
+function typeIntoPane(text) {
+  const cur = JSON.parse(
+    execFileSync("herdr", ["pane", "current"], { encoding: "utf8" }),
+  );
+  const pane = cur.result && cur.result.pane;
+  if (!pane || !pane.pane_id) return false;
+  execFileSync("herdr", ["pane", "send-text", pane.pane_id, text]);
+  return true;
+}
+
+http
+  .createServer((req, res) => {
+    const end = (code, obj) => {
+      if (!res.headersSent)
+        res.writeHead(code, { "content-type": "application/json" });
+      res.end(JSON.stringify(obj));
+    };
+    const url = (req.url || "").split("?")[0];
+    if (req.method !== "POST" || url !== "/kitchen-upload") {
+      return end(404, { error: "POST /kitchen-upload only" });
+    }
+    // Defence in depth: Caddy only routes here inside @authed, but the
+    // daemon answers on localhost for every process in the sandbox.
+    const secret = process.env.KITCHEN_SECRET || "";
+    const cookie = req.headers.cookie || "";
+    if (!secret || !cookie.includes("kitchen=" + secret)) {
+      return end(403, { error: "authentication required" });
+    }
+    const chunks = [];
+    let size = 0;
+    let tooBig = false;
+    req.on("data", (c) => {
+      size += c.length;
+      if (size > MAX_BYTES) {
+        tooBig = true;
+        end(413, { error: "file too large" });
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("error", () => {});
+    req.on("end", () => {
+      if (tooBig) return;
+      if (!chunks.length) return end(400, { error: "empty body" });
+      const ext = EXTS[req.headers["x-shot-type"]] || ".png";
+      const stamp = new Date()
+        .toISOString()
+        .replace(/[:T.-]/g, "")
+        .slice(0, 14);
+      const file = path.join(
+        DIR,
+        "shot-" + stamp + "-" + Math.random().toString(36).slice(2, 6) + ext,
+      );
+      fs.writeFileSync(file, Buffer.concat(chunks));
+      // The magic words to an agent never change: "look at latest.png".
+      const latest = path.join(DIR, "latest" + ext);
+      try {
+        fs.rmSync(latest, { force: true });
+        fs.symlinkSync(file, latest);
+      } catch {}
+      let typed = false;
+      if (req.headers["x-kitchen-pane"] === "herdr") {
+        try {
+          typed = typeIntoPane(file + " ");
+        } catch {}
+      }
+      end(200, { path: file, typed });
+    });
+  })
+  .listen(PORT, "127.0.0.1", () => {
+    console.log("kitchen-upload listening on 127.0.0.1:" + PORT);
+  });
+UPLOADJS
+# ttyd's frontend is one self-contained html; patch a copy with the paste
+# script and serve it via ttyd -I. Generated from a throwaway stock
+# instance at boot: any failure removes the file, INDEX_ARG below stays
+# empty, and panes serve the stock page — this feature can never take
+# the terminals down.
+ttyd -p 17999 -i 127.0.0.1 true & tmp_ttyd=$!
+for i in 1 2 3 4 5; do
+  if curl -fsS -o /tmp/ttyd-stock.html http://127.0.0.1:17999/; then break; fi
+  sleep 1
+done
+kill $tmp_ttyd 2>/dev/null
+if [ -s /tmp/ttyd-stock.html ]; then
+  awk '{ sub(/<\/body>/, "<script src=\"/kitchen-paste.js\"></script></body>") } { print }' /tmp/ttyd-stock.html > /etc/kitchen/ttyd-index.html
+  grep -q kitchen-paste.js /etc/kitchen/ttyd-index.html || rm -f /etc/kitchen/ttyd-index.html
+fi
+
 cd /workspace
 TTYD_THEME='{"background":"#0a0a0b","foreground":"#c9c9cf","cursor":"#c6f24e","selectionBackground":"#3a3a2e"}'
-ttyd -p 17681 -i 127.0.0.1 -W -t "theme=$TTYD_THEME" -t fontSize=13 zsh &
-ttyd -p 17683 -i 127.0.0.1 -W -t "theme=$TTYD_THEME" -t fontSize=13 herdr &
+# patched index if generation above succeeded, stock page otherwise
+INDEX_ARG=
+[ -s /etc/kitchen/ttyd-index.html ] && INDEX_ARG="-I /etc/kitchen/ttyd-index.html"
+ttyd -p 17681 -i 127.0.0.1 $INDEX_ARG -W -t "theme=$TTYD_THEME" -t fontSize=13 zsh &
+ttyd -p 17683 -i 127.0.0.1 $INDEX_ARG -W -t "theme=$TTYD_THEME" -t fontSize=13 herdr &
 code-server --bind-addr 127.0.0.1:18443 --auth none --disable-telemetry /workspace &
 caddy run --config /tmp/Caddyfile --adapter caddyfile &
+
+# screenshot upload daemon (auxiliary): restart loop, so it can never
+# fail the sandbox — the four services above stay the supervised ones.
+while :; do
+  node /etc/kitchen/upload-server.js >>/tmp/kitchen-upload.log 2>&1
+  sleep 1
+done &
 
 # fail the sandbox loudly if any service dies
 wait -n
