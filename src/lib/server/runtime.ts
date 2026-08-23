@@ -30,6 +30,17 @@
 // UI (src/html.h), so it builds from source with cmake alone. Pinned commit.
 const TTYD_COMMIT = "2922cb89f518bae4d0fcf4d757a7419638fc71fc";
 
+// herdr. Pinned to a preview build + digest because the stable installer's
+// "latest" resolution is exactly the trap that bit us: Modal's layer cache
+// froze herdr 0.8.2 into the image, where HERDR_PROCESS_DETECTION=child-
+// groups (see the boot script for why sandboxes need it) does not yet
+// exist — the docs described it, the shipped binary ignored it. Preview
+// 2026-08-19-b5c4a0176e91 is verified working on a live Modal sandbox.
+// Bump build + digest together with RUNTIME_VERSION to upgrade. Move back
+// to the stable manifest build once a stable release ships the mode.
+const HERDR_BUILD = "2026-08-19-b5c4a0176e91";
+const HERDR_SHA256 = "fe5d3009003113731bfe1e7a72b356acaf2d6e35aee952aa68ecb4fd63710d8c";
+
 /**
  * Bump when `runtimeCommands` changes in a way an existing sandbox would care
  * about (new binary versions, new preinstalled tooling). Snapshots record
@@ -39,7 +50,7 @@ const TTYD_COMMIT = "2922cb89f518bae4d0fcf4d757a7419638fc71fc";
  *
  * Mirrored in $lib/runtimeVersion.ts for the client; keep the two in step.
  */
-export const RUNTIME_VERSION = 5;
+export const RUNTIME_VERSION = 6;
 const CODE_SERVER_VERSION = "4.133.0";
 const UV_VERSION = "0.12.5";
 const CADDY_VERSION = "2.11.4";
@@ -57,7 +68,7 @@ export const runtimeCommands = [
   `RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential cmake libjson-c-dev libwebsockets-dev && curl -fsSL https://github.com/tsl0922/ttyd/archive/${TTYD_COMMIT}.tar.gz | tar -xz -C /tmp && cmake -S /tmp/ttyd-${TTYD_COMMIT} -B /tmp/ttyd-build && make -C /tmp/ttyd-build -j"$(nproc)" install && rm -rf /tmp/ttyd-${TTYD_COMMIT} /tmp/ttyd-build /var/lib/apt/lists/*`,
   `RUN curl -fsSL https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_amd64.tar.gz | tar -xz -C /usr/local/bin caddy`,
   `RUN curl -fsSL https://code-server.dev/install.sh | sh -s -- --method=standalone --version=${CODE_SERVER_VERSION}`,
-  "RUN curl -fsSL https://herdr.dev/install.sh | sh",
+  `RUN mkdir -p /root/.local/bin && curl -fsSL https://github.com/herdrdev/herdr/releases/download/preview-${HERDR_BUILD}/herdr-linux-x86_64 -o /root/.local/bin/herdr && echo "${HERDR_SHA256}  /root/.local/bin/herdr" | sha256sum -c - && chmod +x /root/.local/bin/herdr`,
   // agent CLIs, preinstalled so herdr detects them out of the box. Modal
   // caches this layer on first build, freezing whatever versions npm
   // resolved then — bump the trailing comment to force a refresh.
@@ -118,6 +129,16 @@ export SHELL=/usr/bin/zsh
 # Unix sockets are fine on the sandbox's own filesystem now, but /tmp keeps
 # the socket out of snapshots, where a stale socket file is meaningless.
 export HERDR_SOCKET_PATH=/tmp/herdr.sock
+# Modal's runtime (gVisor) hides a pty's foreground process group from
+# /proc (tty_nr/tpgid read 0 even for a TUI agent on a real pty), so
+# herdr's native foreground-process detection can never identify a pane's
+# agent. Hook reports from herdr's own integrations don't rescue it — they
+# are suppressed as stale unless the agent process was identified first.
+# child-groups makes the herdr server infer each pane's foreground job from
+# its shell's child process groups instead; the image pins a herdr build
+# that implements it. Only the server reads it, so export it everywhere the
+# boot env is seeded (profile.d and zshenv below), like HERDR_SOCKET_PATH.
+export HERDR_PROCESS_DETECTION=child-groups
 
 mkdir -p /workspace
 # name marker for the in-sandbox kitchen command
@@ -130,12 +151,24 @@ printf '%s' "$KITCHEN_SANDBOX_NAME" > /etc/kitchen-name
 # Creating them is enough for its installer to proceed. In the boot script
 # rather than the image so machines restored from older snapshots get it too.
 mkdir -p /root/.claude /root/.codex /root/.pi/agent/extensions
+# ...then actually install them. The mkdir only unblocks the installer — a
+# fresh machine otherwise ships with zero integrations (they are what gave
+# one sandbox a working sidebar by hand and made the env var look
+# sufficient). Bundled assets written to the config dirs, no server needed.
+# pi's hooks own full lifecycle state once detection identifies the pane;
+# claude/codex get native session identity for restore.
+herdr integration install pi >/dev/null || true
+herdr integration install claude >/dev/null || true
+herdr integration install codex >/dev/null || true
 
 # herdr: replay recent pane contents after restarts. Seeded once only — the
 # config lives in the machine now, so user edits stick.
 mkdir -p /root/.config/herdr
 if [ ! -f /root/.config/herdr/config.toml ]; then
-	printf '[terminal]\ndefault_shell = "zsh"\n\n[experimental]\npane_history = true\n' > /root/.config/herdr/config.toml
+	# version_check = off: herdr's updater would "upgrade" the pinned preview
+	# binary back to stable 0.8.2 (a preview install on the default stable
+	# channel always counts as outdated), silently losing child-groups.
+	printf '[terminal]\ndefault_shell = "zsh"\n\n[experimental]\npane_history = true\n\n[update]\nversion_check = false\n' > /root/.config/herdr/config.toml
 fi
 
 # --- prompt (root's .bashrc would otherwise override profile.d) ---
@@ -143,6 +176,7 @@ cat > /etc/profile.d/kitchen.sh <<PROFILE
 export PS1='\[\e[38;5;191m\]kitchen@'$KITCHEN_SANDBOX_NAME'\[\e[0m\]:\[\e[38;5;110m\]\w\[\e[0m\]$ '
 export PATH="$KITCHEN_TOOL_PATH:\$PATH"
 export HERDR_SOCKET_PATH=/tmp/herdr.sock
+export HERDR_PROCESS_DETECTION=child-groups # see boot script note
 case \$- in *i*)
 	if [ -z "\$KITCHEN_MOTD_SHOWN" ]; then
 		export KITCHEN_MOTD_SHOWN=1
@@ -193,6 +227,7 @@ cat > /etc/zsh/zshenv <<ZSHENV
 typeset -U path PATH
 export PATH="$KITCHEN_TOOL_PATH:\$PATH"
 export HERDR_SOCKET_PATH=/tmp/herdr.sock
+export HERDR_PROCESS_DETECTION=child-groups # see boot script note
 export SHELL=/usr/bin/zsh
 ZSHENV
 
