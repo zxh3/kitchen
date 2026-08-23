@@ -23,7 +23,7 @@ general image flow anyway (read tool / `view_image` / `Read`).
 
 ```
 laptop clipboard (⌘V in pane)
-  → ttyd page (patched index, injected pane-paste/paste.js)
+  → ttyd page (patched index, injected terminal-client/client.js)
   → POST /kitchen-upload        (same origin, Caddy cookie auth)
   → /etc/kitchen/upload-server.js on 127.0.0.1:17009
       · saves /tmp/kitchen-shots/shot-<ts>-<rand>.png + latest.png symlink
@@ -34,14 +34,14 @@ laptop clipboard (⌘V in pane)
 
 - **Patched index via `ttyd -I`**: ttyd's frontend is one self-contained
   html; at boot a throwaway instance serves the stock page, an awk splice
-  inserts `<script src="/kitchen-paste.js">` before `</body>`, both ttyds
+  inserts `<script src="/kitchen-terminal.js">` before `</body>`, both ttyds
   start with `-I /etc/kitchen/ttyd-index.html`. Any failure removes the
   file, `INDEX_ARG` stays empty, and panes serve the stock page — the
-  feature degrades silently, terminals never break. Serving paste.js as a
-  separate file (vs inlining it into the html) is deliberate: hot-patching
-  client code on a live sandbox is a file write + browser reload, no
-  restart.
-- **Caddy**: `/kitchen-upload` and `/kitchen-paste.js` routes live in the
+  feature degrades silently, terminals never break. Serving the terminal
+  client as a separate file (vs inlining it into the html) is deliberate:
+  hot-patching client code on a live sandbox is a file write + browser
+  reload, no restart.
+- **Caddy**: `/kitchen-upload` and `/kitchen-terminal.js` routes live in the
   shared `kitchenauth` snippet; a second snippet arg tags the pane type
   (`zsh`/`herdr`/`code`) as `X-Kitchen-Pane` for the daemon.
 - **Everything in the boot script**: no image rebuild, no RUNTIME_VERSION
@@ -63,7 +63,8 @@ paste still belongs to xterm.
 ## Failure modes (all degrade, none fatal)
 
 - index generation fails → stock ttyd page, no paste feature (rest is fine)
-- daemon down/crashed → restart loop; upload 502s, paste.js toasts the error
+- daemon down/crashed → restart loop; upload 502s, the terminal client
+  toasts the error
 - herdr unreachable / no current pane → `typed:false`, client falls back to
   clipboard copy
 - focus moved mid-upload → path typed into the new current pane (harmless
