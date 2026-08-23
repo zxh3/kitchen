@@ -7,39 +7,33 @@
  * live where tools normally live, and anything installed anywhere survives.
  * Volumes are a user-visible option, never a runtime mechanism.
  *
- * Two halves:
- *  - `runtimeCommands` — image layers appended to every base image. Modal
+ * Two artifacts, BOTH ASSEMBLED from the session-mode registry (see
+ * server/context.ts + src/lib/modes/*):
+ *  - `runtimeCommands` — image layers: the shared base below, then each
+ *    mode's `imageLayers` in registration order, deduped by content. Modal
  *    caches built images by layer content, so keep these deterministic
  *    (pinned versions) or every sandbox launch pays a rebuild.
- *  - `bootScript` — the sandbox entrypoint, passed as the create command.
- *    It carries no secrets in the image: the per-sandbox auth secret arrives
- *    via the KITCHEN_SECRET env var at launch. If any service dies, the
- *    script exits nonzero so the status reconciler reports the sandbox as
- *    failed.
+ *  - `bootScript` — the sandbox entrypoint, passed as the create command:
+ *    the skeleton below with each mode's `bootEnv` / `bootSection` /
+ *    `supervised` / `caddyBlock` spliced into marked slots.
  *
  * Auth model: Caddy owns the public tunnel ports and fronts every service
  * (which bind to localhost only). The console points each pane's iframe at
  * /kitchen-auth?token=<secret>; Caddy answers with an HttpOnly cookie and a
  * redirect, and everything after that — including WebSockets — must carry
  * the cookie. No long-lived secret sits in a URL.
+ *
+ * NOTE on both the skeleton and every contributed fragment: avoid \`${\`
+ * entirely — JS template interpolation would otherwise swallow the shell's
+ * own expansions. Skeleton slots use plain ${...} against contribution
+ * strings, which is safe because contributions declare fragments with
+ * String.raw under the same rule (src/lib/modes/types.ts). The fixtures in
+ * tests/fixtures/ pin the assembled bytes (`npm run check:runtime`).
  */
 
-// ttyd's last release (1.7.7, 2024) predates xterm.js's clipboard addon, so
-// OSC 52 copies — how herdr's copy-on-select reaches the browser clipboard —
-// were silently dropped. Master bundles the addon and commits a prebuilt web
-// UI (src/html.h), so it builds from source with cmake alone. Pinned commit.
-const TTYD_COMMIT = "2922cb89f518bae4d0fcf4d757a7419638fc71fc";
-
-// herdr. Pinned to a preview build + digest because the stable installer's
-// "latest" resolution is exactly the trap that bit us: Modal's layer cache
-// froze herdr 0.8.2 into the image, where HERDR_PROCESS_DETECTION=child-
-// groups (see the boot script for why sandboxes need it) does not yet
-// exist — the docs described it, the shipped binary ignored it. Preview
-// 2026-08-19-b5c4a0176e91 is verified working on a live Modal sandbox.
-// Bump build + digest together with RUNTIME_VERSION to upgrade. Move back
-// to the stable manifest build once a stable release ships the mode.
-const HERDR_BUILD = "2026-08-19-b5c4a0176e91";
-const HERDR_SHA256 = "fe5d3009003113731bfe1e7a72b356acaf2d6e35aee952aa68ecb4fd63710d8c";
+import { bootEnvBlock, bootEnvMirror, type BootEnvEntry } from "$lib/modes/env";
+import { WORKSPACE_DIR } from "$lib/types";
+import { kitchen } from "./context";
 
 /**
  * Bump when `runtimeCommands` changes in a way an existing sandbox would care
@@ -51,24 +45,24 @@ const HERDR_SHA256 = "fe5d3009003113731bfe1e7a72b356acaf2d6e35aee952aa68ecb4fd63
  * Mirrored in $lib/runtimeVersion.ts for the client; keep the two in step.
  */
 export const RUNTIME_VERSION = 6;
-const CODE_SERVER_VERSION = "4.133.0";
 const UV_VERSION = "0.12.5";
 const CADDY_VERSION = "2.11.4";
 const GH_VERSION = "2.98.0";
 
-import { modePorts, WORKSPACE_DIR } from "$lib/types";
-
-/** Caddy proxies each public port to the service on localhost. */
-export { modePorts };
-export const runtimePorts = Object.values(modePorts);
 export { WORKSPACE_DIR };
 
-export const runtimeCommands = [
+/**
+ * The base layers every sandbox gets, regardless of registered modes: build
+ * and auth-proxy plumbing (`caddy`), toolchains, the agent CLIs, and the
+ * zsh-as-login-shell persona (which herdr's terminals depend on too — the
+ * "zsh" MODE is only the ttyd pane, see src/lib/modes/zsh.ts). The `ln -sf`
+ * fixup names mode binaries (herdr, code-server) deliberately: a dangling
+ * link is harmless when a mode is absent, while forgetting one breaks PATH
+ * for services whose environment froze at boot.
+ */
+const baseCommands = [
   "RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl ca-certificates git && rm -rf /var/lib/apt/lists/*",
-  `RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential cmake libjson-c-dev libwebsockets-dev && curl -fsSL https://github.com/tsl0922/ttyd/archive/${TTYD_COMMIT}.tar.gz | tar -xz -C /tmp && cmake -S /tmp/ttyd-${TTYD_COMMIT} -B /tmp/ttyd-build && make -C /tmp/ttyd-build -j"$(nproc)" install && rm -rf /tmp/ttyd-${TTYD_COMMIT} /tmp/ttyd-build /var/lib/apt/lists/*`,
   `RUN curl -fsSL https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_amd64.tar.gz | tar -xz -C /usr/local/bin caddy`,
-  `RUN curl -fsSL https://code-server.dev/install.sh | sh -s -- --method=standalone --version=${CODE_SERVER_VERSION}`,
-  `RUN mkdir -p /root/.local/bin && curl -fsSL https://github.com/herdrdev/herdr/releases/download/preview-${HERDR_BUILD}/herdr-linux-x86_64 -o /root/.local/bin/herdr && echo "${HERDR_SHA256}  /root/.local/bin/herdr" | sha256sum -c - && chmod +x /root/.local/bin/herdr`,
   // agent CLIs, preinstalled so herdr detects them out of the box. Modal
   // caches this layer on first build, freezing whatever versions npm
   // resolved then — bump the trailing comment to force a refresh.
@@ -85,12 +79,6 @@ export const runtimeCommands = [
   `RUN curl -fsSL https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz | tar -xz -C /usr/local/bin --strip-components=2 gh_${GH_VERSION}_linux_amd64/bin/gh`,
   // the installers drop binaries in /root/.local/bin, which login shells don't have on PATH
   "RUN ln -sf /root/.local/bin/herdr /root/.local/bin/code-server /root/.local/bin/uv /root/.local/bin/uvx /usr/local/bin/",
-  // code-server defaults: dark theme, no telemetry, no trust prompts.
-  // `autoDetectColorScheme` must be off — it is on by default and follows the
-  // *browser's* preference, which silently overrode the theme and rendered the
-  // pane light inside a dark console. The theme id is the one this build
-  // actually contributes ("Dark Modern"); ids from other versions are ignored.
-  `RUN mkdir -p /root/.local/share/code-server/User && printf '%s' '{"workbench.colorTheme":"Dark Modern","window.autoDetectColorScheme":false,"security.workspace.trust.enabled":false,"telemetry.telemetryLevel":"off","workbench.startupEditor":"none"}' > /root/.local/share/code-server/User/settings.json`,
   // the working directory: an ordinary directory, captured by snapshots
   // like the rest of the machine
   `RUN mkdir -p ${WORKSPACE_DIR} && printf '%s' '${RUNTIME_VERSION}' > /etc/kitchen-runtime-version`,
@@ -102,9 +90,20 @@ export const runtimeCommands = [
   `RUN printf '%s\\n' 'export ZSH="$HOME/.oh-my-zsh"' 'ZSH_THEME="robbyrussell"' 'ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=241"' 'plugins=(git zsh-autosuggestions)' 'zstyle ":omz:alpha:lib:git" async-prompt no' 'source $ZSH/oh-my-zsh.sh' '[ -f /etc/kitchen-zshrc ] && source /etc/kitchen-zshrc' > /root/.zshrc`,
 ];
 
-// NOTE: written to avoid \`${\` entirely — JS template interpolation would
-// otherwise swallow the shell's own expansions.
-export const bootScript = String.raw`
+function dedupe(layers: readonly string[]): string[] {
+  return [...new Set(layers)];
+}
+
+/** Every boot variable the registered modes asked for. */
+function allBootEnv(
+  modes: readonly { bootEnv?: readonly BootEnvEntry[] }[],
+): BootEnvEntry[] {
+  return modes.flatMap((m) => m.bootEnv ?? []);
+}
+
+// --- boot-script skeleton: fixed text with marked slots for contributions ---
+
+const SKELETON_HEAD = String.raw`
 set -u
 [ -n "$KITCHEN_SECRET" ] || { echo "KITCHEN_SECRET not set" >&2; exit 1; }
 [ -n "$KITCHEN_SANDBOX_NAME" ] || KITCHEN_SANDBOX_NAME=sandbox
@@ -125,68 +124,31 @@ set -u
 # whole sandbox when they exit.
 KITCHEN_TOOL_PATH=/root/.cargo/bin:/root/.local/bin:/root/.bun/bin:/root/.deno/bin:/root/go/bin:/usr/local/go/bin
 export PATH="$KITCHEN_TOOL_PATH:$PATH"
-export SHELL=/usr/bin/zsh
-# Unix sockets are fine on the sandbox's own filesystem now, but /tmp keeps
-# the socket out of snapshots, where a stale socket file is meaningless.
-export HERDR_SOCKET_PATH=/tmp/herdr.sock
-# Modal's runtime (gVisor) hides a pty's foreground process group from
-# /proc (tty_nr/tpgid read 0 even for a TUI agent on a real pty), so
-# herdr's native foreground-process detection can never identify a pane's
-# agent. Hook reports from herdr's own integrations don't rescue it — they
-# are suppressed as stale unless the agent process was identified first.
-# child-groups makes the herdr server infer each pane's foreground job from
-# its shell's child process groups instead; the image pins a herdr build
-# that implements it. Only the server reads it, so export it everywhere the
-# boot env is seeded (profile.d and zshenv below), like HERDR_SOCKET_PATH.
-export HERDR_PROCESS_DETECTION=child-groups
+export SHELL=/usr/bin/zsh`;
 
-mkdir -p /workspace
+const NAME_MARKER = String.raw`mkdir -p /workspace
 # name marker for the in-sandbox kitchen command
-printf '%s' "$KITCHEN_SANDBOX_NAME" > /etc/kitchen-name
+printf '%s' "$KITCHEN_SANDBOX_NAME" > /etc/kitchen-name`;
 
-# herdr installs its agent integrations into each agent's OWN config directory,
-# and each agent only creates that directory the first time it runs. On a fresh
-# machine the binaries are all present but the directories are not, so herdr
-# reports "install claude code first" about an agent that is already installed.
-# Creating them is enough for its installer to proceed. In the boot script
-# rather than the image so machines restored from older snapshots get it too.
-mkdir -p /root/.claude /root/.codex /root/.pi/agent/extensions
-# ...then actually install them. The mkdir only unblocks the installer — a
-# fresh machine otherwise ships with zero integrations (they are what gave
-# one sandbox a working sidebar by hand and made the env var look
-# sufficient). Bundled assets written to the config dirs, no server needed.
-# pi's hooks own full lifecycle state once detection identifies the pane;
-# claude/codex get native session identity for restore.
-herdr integration install pi >/dev/null || true
-herdr integration install claude >/dev/null || true
-herdr integration install codex >/dev/null || true
-
-# herdr: replay recent pane contents after restarts. Seeded once only — the
-# config lives in the machine now, so user edits stick.
-mkdir -p /root/.config/herdr
-if [ ! -f /root/.config/herdr/config.toml ]; then
-	# version_check = off: herdr's updater would "upgrade" the pinned preview
-	# binary back to stable 0.8.2 (a preview install on the default stable
-	# channel always counts as outdated), silently losing child-groups.
-	printf '[terminal]\ndefault_shell = "zsh"\n\n[experimental]\npane_history = true\n\n[update]\nversion_check = false\n' > /root/.config/herdr/config.toml
-fi
-
-# --- prompt (root's .bashrc would otherwise override profile.d) ---
+/** profile.d + MOTD, with the boot-env mirror rendered into the marked slot. */
+function promptBlock(mirror: string): string {
+  return (
+    String.raw`# --- prompt (root's .bashrc would otherwise override profile.d) ---
 cat > /etc/profile.d/kitchen.sh <<PROFILE
 export PS1='\[\e[38;5;191m\]kitchen@'$KITCHEN_SANDBOX_NAME'\[\e[0m\]:\[\e[38;5;110m\]\w\[\e[0m\]$ '
 export PATH="$KITCHEN_TOOL_PATH:\$PATH"
-export HERDR_SOCKET_PATH=/tmp/herdr.sock
-export HERDR_PROCESS_DETECTION=child-groups # see boot script note
-case \$- in *i*)
+${mirror}case \$- in *i*)
 	if [ -z "\$KITCHEN_MOTD_SHOWN" ]; then
 		export KITCHEN_MOTD_SHOWN=1
 		printf '\e[90mthe whole machine is saved when you stop $KITCHEN_SANDBOX_NAME - packages, config, /workspace, all of it.\ntype \e[0mkitchen\e[90m for details.\e[0m\n'
 	fi
 ;; esac
 PROFILE
-echo '[ -f /etc/profile.d/kitchen.sh ] && . /etc/profile.d/kitchen.sh' >> /root/.bashrc
+echo '[ -f /etc/profile.d/kitchen.sh ] && . /etc/profile.d/kitchen.sh' >> /root/.bashrc`
+  );
+}
 
-# --- the in-sandbox reference: how persistence actually works here ---
+const KITCHEN_CMD = String.raw`# --- the in-sandbox reference: how persistence actually works here ---
 cat > /usr/local/bin/kitchen <<'KITCHENCMD'
 #!/bin/sh
 NAME=$(cat /etc/kitchen-name 2>/dev/null || echo sandbox)
@@ -220,18 +182,21 @@ printf '  anything elsewhere: ln -s <dir>/<tool> /usr/local/bin/ - takes\n'
 printf '  effect immediately, no restart. restarting a service does NOT pick\n'
 printf '  up a new PATH, and stopping one fails the sandbox.\n'
 KITCHENCMD
-chmod +x /usr/local/bin/kitchen
+chmod +x /usr/local/bin/kitchen`;
 
-# --- zsh: env for every invocation, plus the kitchen prompt + MOTD ---
+/** zshenv, with the boot-env mirror rendered into its marked slot. */
+function zshenvBlock(mirror: string): string {
+  return (
+    String.raw`# --- zsh: env for every invocation, plus the kitchen prompt + MOTD ---
 cat > /etc/zsh/zshenv <<ZSHENV
 typeset -U path PATH
 export PATH="$KITCHEN_TOOL_PATH:\$PATH"
-export HERDR_SOCKET_PATH=/tmp/herdr.sock
-export HERDR_PROCESS_DETECTION=child-groups # see boot script note
-export SHELL=/usr/bin/zsh
-ZSHENV
+${mirror}export SHELL=/usr/bin/zsh
+ZSHENV`
+  );
+}
 
-cat > /etc/kitchen-zshrc <<KITCHENZSH
+const ZSHRC_BLOCK = String.raw`cat > /etc/kitchen-zshrc <<KITCHENZSH
 export HISTFILE=/root/.zsh_history
 export HISTSIZE=10000
 export SAVEHIST=10000
@@ -240,9 +205,9 @@ if [ -z "\$KITCHEN_MOTD_SHOWN" ]; then
 	export KITCHEN_MOTD_SHOWN=1
 	printf '\e[90mthe whole machine is saved when you stop $KITCHEN_SANDBOX_NAME - packages, config, /workspace, all of it.\ntype \e[0mkitchen\e[90m for details.\e[0m\n'
 fi
-KITCHENZSH
+KITCHENZSH`;
 
-# --- auth proxy: cookie exchange in front of every service ---
+const CADDY_HEAD = String.raw`# --- auth proxy: cookie exchange in front of every service ---
 cat > /tmp/Caddyfile <<CADDYEOF
 {
 	admin off
@@ -266,53 +231,61 @@ cat > /tmp/Caddyfile <<CADDYEOF
 	handle {
 		respond "kitchen: authentication required" 403
 	}
-}
-:7681 {
-	import kitchenauth 17681
-}
-:7683 {
-	import kitchenauth 17683
-}
-:8443 {
-	import kitchenauth 18443
-}
-:8080 {
-	@login {
-		path /kitchen-auth
-		query token=$KITCHEN_SECRET
-	}
-	handle @login {
-		header Set-Cookie "kitchen=$KITCHEN_SECRET; Path=/; Secure; HttpOnly; SameSite=None"
-		redir * / 302
-	}
-	@authed {
-		header Cookie *kitchen=$KITCHEN_SECRET*
-	}
-	handle @authed {
-		reverse_proxy 127.0.0.1:3000 {
-			header_up Host {upstream_hostport}
-			header_down -X-Frame-Options
-			header_down -Content-Security-Policy
-		}
-	}
-	handle {
-		respond "kitchen: authentication required" 403
-	}
-	handle_errors {
-		respond "kitchen: nothing is listening on port 3000 in this sandbox yet. start your app on port 3000 and reload this tab." 502
-	}
-}
-CADDYEOF
+}`;
 
-cd /workspace
-TTYD_THEME='{"background":"#0a0a0b","foreground":"#c9c9cf","cursor":"#c6f24e","selectionBackground":"#3a3a2e"}'
-ttyd -p 17681 -i 127.0.0.1 -W -t "theme=$TTYD_THEME" -t fontSize=13 zsh &
-ttyd -p 17683 -i 127.0.0.1 -W -t "theme=$TTYD_THEME" -t fontSize=13 herdr &
-code-server --bind-addr 127.0.0.1:18443 --auth none --disable-telemetry /workspace &
-caddy run --config /tmp/Caddyfile --adapter caddyfile &
+const CADDY_TAIL = String.raw`CADDYEOF`;
+
+const SUPERVISED_TAIL = String.raw`caddy run --config /tmp/Caddyfile --adapter caddyfile &
 
 # fail the sandbox loudly if any service dies
 wait -n
 echo "kitchen boot: a service exited" >&2
-exit 1
-`;
+exit 1`;
+
+/** Compose the sandbox entrypoint from the registry's contributions. */
+function assembleBootScript(
+  modes: readonly {
+    bootEnv?: readonly BootEnvEntry[];
+    bootSection?: string;
+    supervisedPrelude?: readonly string[];
+    supervised?: readonly string[];
+    caddyBlock: string;
+  }[],
+): string {
+  const env = allBootEnv(modes);
+  const preambleEnv = bootEnvBlock(env);
+  const mirror = bootEnvMirror(env);
+  const mirrorSlot = mirror ? `${mirror}\n` : "";
+  const bootSections = modes.flatMap((m) => (m.bootSection ? [m.bootSection] : []));
+  const preludes = dedupe(modes.flatMap((m) => m.supervisedPrelude ?? []));
+  const processes = modes.flatMap((m) => m.supervised ?? []);
+
+  return (
+    SKELETON_HEAD +
+    (preambleEnv ? `\n${preambleEnv}` : "") +
+    `\n\n${NAME_MARKER}` +
+    bootSections.map((s) => `\n\n${s}`).join("") +
+    `\n\n${promptBlock(mirrorSlot)}` +
+    `\n\n${KITCHEN_CMD}` +
+    `\n\n${zshenvBlock(mirrorSlot)}` +
+    `\n\n${ZSHRC_BLOCK}` +
+    `\n\n${CADDY_HEAD}\n${modes.map((m) => m.caddyBlock).join("\n")}\n${CADDY_TAIL}` +
+    `\n\ncd /workspace\n${[...preludes, ...processes].join("\n")}\n${SUPERVISED_TAIL}\n`
+  );
+}
+
+// The registry is the source of truth; assembling is a pure function of it.
+// Top-level await runs at first import of any server module that touches the
+// runtime — kitchen() itself is idempotent per process (see context.ts).
+const ctx = await kitchen();
+const modes = ctx.sessionModes.list();
+
+/** Caddy proxies each public port to the service on localhost. */
+export const runtimePorts = modes.map((m) => m.port);
+
+export const runtimeCommands = [
+  ...baseCommands,
+  ...dedupe(modes.flatMap((m) => m.imageLayers ?? [])),
+];
+
+export const bootScript = assembleBootScript(modes);

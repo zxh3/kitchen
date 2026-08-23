@@ -1,0 +1,18 @@
+[
+  "RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl ca-certificates git && rm -rf /var/lib/apt/lists/*",
+  "RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential cmake libjson-c-dev libwebsockets-dev && curl -fsSL https://github.com/tsl0922/ttyd/archive/2922cb89f518bae4d0fcf4d757a7419638fc71fc.tar.gz | tar -xz -C /tmp && cmake -S /tmp/ttyd-2922cb89f518bae4d0fcf4d757a7419638fc71fc -B /tmp/ttyd-build && make -C /tmp/ttyd-build -j\"$(nproc)\" install && rm -rf /tmp/ttyd-2922cb89f518bae4d0fcf4d757a7419638fc71fc /tmp/ttyd-build /var/lib/apt/lists/*",
+  "RUN curl -fsSL https://github.com/caddyserver/caddy/releases/download/v2.11.4/caddy_2.11.4_linux_amd64.tar.gz | tar -xz -C /usr/local/bin caddy",
+  "RUN curl -fsSL https://code-server.dev/install.sh | sh -s -- --method=standalone --version=4.133.0",
+  "RUN mkdir -p /root/.local/bin && curl -fsSL https://github.com/herdrdev/herdr/releases/download/preview-2026-08-19-b5c4a0176e91/herdr-linux-x86_64 -o /root/.local/bin/herdr && echo \"fe5d3009003113731bfe1e7a72b356acaf2d6e35aee952aa68ecb4fd63710d8c  /root/.local/bin/herdr\" | sha256sum -c - && chmod +x /root/.local/bin/herdr",
+  "RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y --no-install-recommends nodejs && rm -rf /var/lib/apt/lists/*",
+  "RUN npm install -g @anthropic-ai/claude-code @openai/codex @earendil-works/pi-coding-agent # agents-v1",
+  "RUN curl -fsSL https://astral.sh/uv/0.12.5/install.sh | sh",
+  "RUN curl -fsSL https://github.com/cli/cli/releases/download/v2.98.0/gh_2.98.0_linux_amd64.tar.gz | tar -xz -C /usr/local/bin --strip-components=2 gh_2.98.0_linux_amd64/bin/gh",
+  "RUN ln -sf /root/.local/bin/herdr /root/.local/bin/code-server /root/.local/bin/uv /root/.local/bin/uvx /usr/local/bin/",
+  "RUN mkdir -p /root/.local/share/code-server/User && printf '%s' '{\"workbench.colorTheme\":\"Dark Modern\",\"window.autoDetectColorScheme\":false,\"security.workspace.trust.enabled\":false,\"telemetry.telemetryLevel\":\"off\",\"workbench.startupEditor\":\"none\"}' > /root/.local/share/code-server/User/settings.json",
+  "RUN mkdir -p /workspace && printf '%s' '6' > /etc/kitchen-runtime-version",
+  "RUN apt-get update && apt-get install -y --no-install-recommends zsh && rm -rf /var/lib/apt/lists/* && chsh -s /usr/bin/zsh root",
+  "RUN sh -c \"$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)\" \"\" --unattended",
+  "RUN git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions /root/.oh-my-zsh/custom/plugins/zsh-autosuggestions",
+  "RUN printf '%s\\n' 'export ZSH=\"$HOME/.oh-my-zsh\"' 'ZSH_THEME=\"robbyrussell\"' 'ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE=\"fg=241\"' 'plugins=(git zsh-autosuggestions)' 'zstyle \":omz:alpha:lib:git\" async-prompt no' 'source $ZSH/oh-my-zsh.sh' '[ -f /etc/kitchen-zshrc ] && source /etc/kitchen-zshrc' > /root/.zshrc"
+]

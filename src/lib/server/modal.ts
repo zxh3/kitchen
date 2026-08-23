@@ -25,9 +25,9 @@ import {
   type Volume,
 } from "modal";
 import { env } from "$env/dynamic/private";
+import { kitchen } from "$lib/server/context";
 import {
   bootScript,
-  modePorts,
   runtimeCommands,
   runtimePorts,
 } from "$lib/server/runtime";
@@ -46,7 +46,6 @@ import {
   type SessionInfo,
   type Snapshot,
   type StoppedSandbox,
-  sessionModes,
   type VolumeMount,
 } from "$lib/types";
 
@@ -334,6 +333,7 @@ export async function launchSandbox(
   options: LaunchOptions = {},
 ): Promise<{ sandboxId: string }> {
   const client = clientFor(creds);
+  const kctx = await kitchen();
   try {
     const app = await client.apps.fromName(APP_NAME, {
       createIfMissing: true,
@@ -380,6 +380,10 @@ export async function launchSandbox(
             ? { "kitchen-forked-from": options.forkedFrom }
             : {}),
         },
+      });
+      kctx.emit("sandbox/started", {
+        name: spec.name,
+        sandboxId: sandbox.sandboxId,
       });
       return { sandboxId: sandbox.sandboxId };
     };
@@ -472,6 +476,7 @@ export async function stopSandbox(
   onPhase: (phase: OpPhase) => void = () => {},
 ): Promise<{ snapshot: Snapshot | null }> {
   const client = clientFor(creds);
+  const kctx = await kitchen();
   try {
     let sandbox: Sandbox;
     try {
@@ -484,9 +489,10 @@ export async function stopSandbox(
     }
 
     let snapshot: Snapshot | null = null;
+    let name: string | null = null;
     if (options.save) {
       const ctx = contextOf(creds, client);
-      const name = (await sandbox.getTags())["kitchen-name"] ?? sandboxId;
+      name = (await sandbox.getTags())["kitchen-name"] ?? sandboxId;
       snapshot = await saveSnapshot(
         ctx,
         sandbox,
@@ -498,6 +504,8 @@ export async function stopSandbox(
 
     onPhase("stopping");
     await sandbox.terminate();
+    // A discarded sandbox never had its tags read; the Modal id stands in.
+    kctx.emit("sandbox/stopped", { name: name ?? sandboxId, sandboxId });
     return { snapshot };
   } catch (e) {
     if (e instanceof NotFoundError || e instanceof InvalidError) {
@@ -546,11 +554,13 @@ export async function getSession(
 
     const tunnels = await sandbox.tunnels();
     const secret = paneSecret(creds, info.name);
+    // The registered modes decide which panes exist and where they answer.
+    const kctx = await kitchen();
     const paneEntries = await Promise.all(
-      sessionModes.map(async (mode) => {
-        const tunnel = tunnels[modePorts[mode]];
+      kctx.sessionModes.list().map(async (mode) => {
+        const tunnel = tunnels[mode.port];
         const url = `${tunnel.url}/kitchen-auth?token=${secret}`;
-        return [mode, { url, ready: await paneIsReady(url) }] as const;
+        return [mode.id, { url, ready: await paneIsReady(url) }] as const;
       }),
     );
     return {
