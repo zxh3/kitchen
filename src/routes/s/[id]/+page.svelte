@@ -45,23 +45,21 @@ let savedAt = $state<string | null>(null);
 let snapshotCount = $state<number | null>(null);
 
 /**
- * Safari refuses the pane cookie.
- *
- * Each pane is an iframe on the sandbox's own tunnel host, so the cookie Caddy
- * sets during /kitchen-auth is a third-party cookie. Safari blocks those by
- * default (Prevent cross-site tracking), the redirected request arrives without
- * it, and the pane answers "kitchen: authentication required". Chrome still
- * allows SameSite=None third-party cookies, which is why it works there.
- *
- * Opening the pane as a top-level tab makes the same cookie first-party, so it
- * works — that is the honest workaround until panes are proxied same-origin.
+ * WebKit refuses the pane cookie in a cross-site iframe. This includes every
+ * mainstream browser on iPhone, not just an app whose name is Safari. Render a
+ * useful launcher there instead of knowingly loading Caddy's 403 response.
+ * Opening the tunnel as a top-level tab makes the cookie first-party.
  */
-const safari =
-  typeof navigator !== "undefined" &&
-  /^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(
-    navigator.userAgent,
-  );
-let cookieNoteDismissed = $state(false);
+let blockedEmbeddedCookies = $state(false);
+$effect(() => {
+  const ua = navigator.userAgent;
+  const iOS =
+    /iPad|iPhone|iPod/i.test(ua) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const desktopSafari =
+    /safari/i.test(ua) && !/chrome|chromium|android|crios|fxios|edg/i.test(ua);
+  blockedEmbeddedCookies = iOS || desktopSafari;
+});
 
 /**
  * Panes that have finished loading.
@@ -280,7 +278,7 @@ const sb = $derived(data.session?.sandbox ?? null);
 	<title>{sb?.name ?? 'sandbox'} · kitchen</title>
 </svelte:head>
 
-<div class="flex h-screen flex-col">
+<div class="flex h-dvh flex-col">
 	{#if !data.session || !sb}
 		<div class="flex flex-1 flex-col items-center justify-center gap-4">
 			<p class="text-body max-w-[420px] text-center text-[12.5px] leading-[1.6]">
@@ -308,11 +306,11 @@ const sb = $derived(data.session?.sandbox ?? null);
 			mutable numbers moved right, where nothing depends on their width.
 		-->
 		<header
-			class="flex h-[46px] flex-none items-center gap-3 overflow-x-auto border-b border-white/8 px-4"
+			class="safe-top flex flex-none flex-wrap items-center gap-2 border-b border-white/8 px-3 py-2 sm:h-[46px] sm:flex-nowrap sm:gap-3 sm:overflow-x-auto sm:px-4 sm:py-0"
 		>
 			<a
 				href="/"
-				class="text-body flex size-[26px] flex-none items-center justify-center rounded-md border border-white/12 text-xs hover:bg-white/5"
+				class="text-body flex size-10 flex-none items-center justify-center rounded-md border border-white/12 text-sm hover:bg-white/5 sm:size-[26px] sm:text-xs"
 				aria-label="Back to sandboxes"
 			>
 				←
@@ -320,13 +318,13 @@ const sb = $derived(data.session?.sandbox ?? null);
 			<!-- flex-none: the row scrolls when it is tight, it does not squeeze
 			     the name away. max-w truncates only genuinely long names. -->
 			<span
-				class="max-w-[220px] flex-none truncate font-mono text-[13px] leading-none font-semibold"
+				class="min-w-0 flex-1 truncate font-mono text-[13px] leading-none font-semibold sm:max-w-[220px] sm:flex-none"
 				title={sb.name}
 			>
 				{sb.name}
 			</span>
 
-			<span class="h-[18px] w-px flex-none bg-white/10"></span>
+			<span class="hidden h-[18px] w-px flex-none bg-white/10 sm:block"></span>
 
 			<!--
 				Mode switcher (client-side: panes stay mounted across switches).
@@ -335,14 +333,14 @@ const sb = $derived(data.session?.sandbox ?? null);
 				port is not the thing anyone is looking for. The number is still
 				there on hover for whoever wants it.
 			-->
-			<div class="flex flex-none items-center gap-[2px] rounded-[7px] border border-white/10 p-[3px]">
+			<div class="order-last flex w-full flex-none items-center gap-[2px] rounded-[7px] border border-white/10 p-[3px] sm:order-none sm:w-auto">
 				{#each sessionModes as m (m)}
 					{@const ready = data.session.panes[m].ready}
 					<button
 						type="button"
 						onclick={() => switchMode(m)}
 						title="{m} · port {modePorts[m]} · {ready ? 'ready' : 'starting'}"
-						class="flex cursor-pointer items-center gap-[6px] rounded-[5px] px-[11px] py-[6px] font-mono text-[11.5px] leading-none font-medium
+						class="flex min-h-9 flex-1 cursor-pointer items-center justify-center gap-[6px] rounded-[5px] px-2 py-[6px] font-mono text-[11.5px] leading-none font-medium sm:min-h-0 sm:flex-none sm:justify-start sm:px-[11px]
 							{mode === m
 							? 'text-ink bg-white/8'
 							: 'text-body hover:text-control hover:bg-white/4'}"
@@ -357,28 +355,28 @@ const sb = $derived(data.session?.sandbox ?? null);
 				{/each}
 			</div>
 
-			<div class="flex-1"></div>
+			<div class="hidden flex-1 sm:block"></div>
 
 			<span
-				class="flex flex-none items-center gap-[6px] text-[11px] leading-none font-medium whitespace-nowrap text-[#8fe0b2]"
+				class="hidden flex-none items-center gap-[6px] text-[11px] leading-none font-medium whitespace-nowrap text-[#8fe0b2] sm:flex"
 			>
 				<span class="bg-running halo-running size-[5px] rounded-full"></span>
 				Running · {formatUptime(sb.createdAt, now)}
 			</span>
-			<span class="text-muted flex-none font-mono text-[11px] whitespace-nowrap">
+			<span class="text-muted hidden flex-none font-mono text-[11px] whitespace-nowrap sm:inline">
 				{formatResources(sb)}
 			</span>
 
-			<span class="h-[18px] w-px flex-none bg-white/10"></span>
+			<span class="hidden h-[18px] w-px flex-none bg-white/10 sm:block"></span>
 
 			<button
 				type="button"
 				onclick={() => (palette.open = true)}
 				title="Search sandboxes and actions ({displayKeys(PALETTE_KEY)})"
 				aria-label="Command palette"
-				class="text-secondary hover:text-control flex flex-none cursor-pointer items-center
+				class="text-secondary hover:text-control hidden flex-none cursor-pointer items-center
 					justify-center rounded-md border border-white/12 px-[7px] py-[6px] font-mono
-					text-[10.5px] leading-none hover:bg-white/5"
+					text-[10.5px] leading-none hover:bg-white/5 sm:flex"
 			>
 				{displayKeys(PALETTE_KEY)}
 			</button>
@@ -390,7 +388,7 @@ const sb = $derived(data.session?.sandbox ?? null);
 					? 'The pane has the keyboard, so shortcuts are asleep — clicking here wakes them'
 					: 'Keyboard shortcuts (?)'}
 				aria-label="Keyboard shortcuts"
-				class="flex size-[26px] flex-none cursor-pointer items-center justify-center rounded-md border font-mono text-[11px]
+				class="hidden size-[26px] flex-none cursor-pointer items-center justify-center rounded-md border font-mono text-[11px] sm:flex
 					{paneHasFocus
 					? 'text-faint border-white/8'
 					: 'text-secondary hover:text-control border-white/12 hover:bg-white/5'}"
@@ -402,15 +400,15 @@ const sb = $derived(data.session?.sandbox ?? null);
 				type="button"
 				onclick={openPaneTab}
 				aria-label="Open this pane in a new tab"
-				title={safari
-					? 'Open this pane in a new tab — the only way panes work in Safari'
+				title={blockedEmbeddedCookies
+					? 'Open this pane in a new tab — embedded panes are blocked by this browser'
 					: 'Open this pane in a new tab'}
-				class="flex flex-none cursor-pointer items-center justify-center rounded-md border text-xs
-					{safari
-					? 'border-accent/40 text-accent gap-[5px] px-[9px] py-[6px] text-[11.5px] font-medium hover:bg-white/5'
-					: 'text-body size-[26px] border-white/12 hover:bg-white/5'}"
+				class="flex size-10 flex-none cursor-pointer items-center justify-center gap-[5px] rounded-md border text-xs sm:size-[26px]
+					{blockedEmbeddedCookies
+					? 'border-accent/40 text-accent font-medium hover:bg-white/5 sm:w-auto sm:px-[9px]'
+					: 'text-body border-white/12 hover:bg-white/5'}"
 			>
-				↗{safari ? ' open in tab' : ''}
+				↗<span class="hidden sm:inline">{blockedEmbeddedCookies ? ' open in tab' : ''}</span>
 			</button>
 
 			<!--
@@ -426,7 +424,7 @@ const sb = $derived(data.session?.sandbox ?? null);
 					onclick={saveNow}
 					disabled={Boolean(saving)}
 					title="Save a snapshot of this machine now, without stopping it"
-					class="text-control flex cursor-pointer items-center gap-[6px] px-[10px] py-[6px] text-[11.5px] leading-none font-medium whitespace-nowrap hover:bg-white/6 disabled:opacity-60"
+					class="text-control flex min-h-10 cursor-pointer items-center gap-[6px] px-3 py-[6px] text-[11.5px] leading-none font-medium whitespace-nowrap hover:bg-white/6 disabled:opacity-60 sm:min-h-0 sm:px-[10px]"
 				>
 					{#if saving}
 						<span class="bg-accent size-[5px] animate-pulse rounded-full"></span>
@@ -434,7 +432,7 @@ const sb = $derived(data.session?.sandbox ?? null);
 					{:else if savedAt}
 						<span class="text-running-text">saved</span>
 					{:else}
-						Save snapshot
+						<span class="sm:hidden">Save</span><span class="hidden sm:inline">Save snapshot</span>
 					{/if}
 				</button>
 				<button
@@ -451,7 +449,7 @@ const sb = $derived(data.session?.sandbox ?? null);
 
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger
-					class="text-body flex size-[26px] flex-none cursor-pointer items-center justify-center rounded-md border border-white/12 text-xs hover:bg-white/5"
+					class="text-body flex size-10 flex-none cursor-pointer items-center justify-center rounded-md border border-white/12 text-xs hover:bg-white/5 sm:size-[26px]"
 					aria-label="Session actions"
 				>
 					⋯
@@ -503,39 +501,6 @@ const sb = $derived(data.session?.sandbox ?? null);
 			</DropdownMenu.Root>
 		</header>
 
-		{#if safari && !cookieNoteDismissed}
-			<div class="flex-none px-4 pt-3">
-				<div
-					class="flex items-start gap-3 rounded-lg border border-white/12 bg-white/3 px-4 py-3"
-				>
-					<span class="bg-stopped mt-[6px] size-[6px] flex-none rounded-full"></span>
-					<div class="flex min-w-0 flex-col gap-2">
-						<span class="text-body text-xs leading-[1.65]">
-							Safari refuses the cookie a pane needs: the pane is an iframe on the sandbox's
-							own host, and Safari blocks third-party cookies by default. Panes will say
-							<span class="font-mono">authentication required</span> here — Chrome and Edge
-							run them inline.
-						</span>
-						<button
-							type="button"
-							onclick={openPaneTab}
-							class="text-accent border-accent/40 w-fit cursor-pointer rounded-[5px] border px-[10px] py-[5px] text-[11.5px] leading-none font-medium hover:bg-white/5"
-						>
-							↗ Open this pane in a new tab
-						</button>
-					</div>
-					<button
-						type="button"
-						onclick={() => (cookieNoteDismissed = true)}
-						aria-label="Dismiss"
-						class="text-faint hover:text-control ml-auto flex size-[22px] flex-none cursor-pointer items-center justify-center rounded text-[11px]"
-					>
-						✕
-					</button>
-				</div>
-			</div>
-		{/if}
-
 		{#if actionError}
 			<div class="px-4 pt-3">
 				<div
@@ -547,7 +512,7 @@ const sb = $derived(data.session?.sandbox ?? null);
 			</div>
 		{/if}
 
-		{#if mode === 'browser' && data.session.panes.browser.ready}
+		{#if !blockedEmbeddedCookies && mode === 'browser' && data.session.panes.browser.ready}
 			<!-- Browser toolbar: path navigation + reload + open in tab -->
 			<div class="flex h-[36px] flex-none items-center gap-2 border-b border-white/6 px-3">
 				<button
@@ -571,6 +536,28 @@ const sb = $derived(data.session?.sandbox ?? null);
 				<span class="text-muted font-mono text-[10.5px] whitespace-nowrap">→ :3000</span>
 			</div>
 		{/if}
+		{#if blockedEmbeddedCookies && data.session.panes[mode].ready}
+			<div class="safe-bottom flex min-h-0 flex-1 flex-col items-center justify-center gap-5 px-6 pb-6 text-center">
+				<div class="border-accent/25 bg-accent/6 flex size-12 items-center justify-center rounded-xl border text-xl text-accent">↗</div>
+				<div class="flex max-w-[340px] flex-col gap-2">
+					<h1 class="text-[17px] font-semibold">Open {mode} in its own tab</h1>
+					<p class="text-body text-[12.5px] leading-[1.65]">
+						On iPhone and Safari, the sandbox cannot authenticate inside an embedded pane.
+						A separate tab works normally and gives the pane more room.
+					</p>
+				</div>
+				<button
+					type="button"
+					onclick={openPaneTab}
+					class="bg-accent text-canvas min-h-11 cursor-pointer rounded-lg px-5 py-3 text-[13px] font-semibold"
+				>
+					Open {mode} ↗
+				</button>
+				<p class="text-muted max-w-[300px] text-[11px] leading-[1.5]">
+					Come back to this tab to switch panes, save a snapshot, or stop the sandbox.
+				</p>
+			</div>
+		{:else}
 		{#each sessionModes as m (m)}
 			{#if visited[m] && data.session.panes[m].ready}
 				{#if m === 'browser'}
@@ -623,6 +610,7 @@ const sb = $derived(data.session?.sandbox ?? null);
 					{/if}
 				</p>
 			</div>
+		{/if}
 		{/if}
 	{/if}
 </div>

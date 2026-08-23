@@ -11,9 +11,9 @@ const scopes: Shortcut["scope"][] = ["Anywhere", "Sandboxes", "In a sandbox"];
 	<Dialog.Portal>
 		<Dialog.Overlay class="fixed inset-0 z-40 bg-black/50" />
 		<Dialog.Content
-			class="bg-drawer text-ink fixed inset-y-0 right-0 z-50 flex w-full max-w-[380px] flex-col border-l border-white/10 focus:outline-none"
+			class="safe-top safe-bottom bg-drawer text-ink fixed inset-y-0 right-0 z-50 flex w-full max-w-[380px] flex-col border-l border-white/10 focus:outline-none"
 		>
-			<div class="flex items-start justify-between border-b border-white/8 px-[22px] pt-5 pb-4">
+			<div class="flex items-start justify-between border-b border-white/8 px-4 pt-5 pb-4 sm:px-[22px]">
 				<div class="flex flex-col gap-[5px]">
 					<Dialog.Title class="text-[17px] leading-[1.1] font-semibold tracking-[-0.2px]">
 						Keyboard shortcuts
@@ -30,7 +30,7 @@ const scopes: Shortcut["scope"][] = ["Anywhere", "Sandboxes", "In a sandbox"];
 				</Dialog.Close>
 			</div>
 
-			<div class="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-[22px] py-5">
+			<div class="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-4 py-5 sm:px-[22px]">
 				{#each scopes as scope (scope)}
 					{@const inScope = shortcuts.filter((s) => s.scope === scope)}
 					{#if inScope.length > 0}

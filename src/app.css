@@ -30,6 +30,27 @@
 
 body {
   @apply bg-canvas font-sans text-ink;
+  min-width: 320px;
+  min-height: 100dvh;
+  overscroll-behavior: none;
+}
+
+/* Keep full-screen controls clear of the iPhone notch and home indicator. */
+@utility safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+@utility safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* iOS zooms the page when a focused field is rendered below 16px. */
+@media (max-width: 639px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 /* Section label: mono 600 · 10 · +.9 tracking */

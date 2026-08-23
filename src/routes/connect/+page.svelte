@@ -98,7 +98,7 @@ async function setRetention(days: RetentionDays) {
 	<title>connect · kitchen</title>
 </svelte:head>
 
-<div class="flex min-h-screen items-center justify-center p-9">
+<div class="safe-top safe-bottom flex min-h-dvh items-center justify-center p-5 sm:p-9">
 	<form onsubmit={connect} class="flex w-full max-w-[488px] flex-col gap-5">
 		<div class="flex items-center gap-[9px]">
 			<span class="bg-accent size-4 rounded-[3px]"></span>

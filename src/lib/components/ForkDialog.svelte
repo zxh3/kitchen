@@ -86,10 +86,10 @@ function submit(event: SubmitEvent) {
 	<Dialog.Portal>
 		<Dialog.Overlay class="fixed inset-0 z-40 bg-black/50" />
 		<Dialog.Content
-			class="bg-drawer text-ink fixed inset-y-0 right-0 z-50 flex w-full max-w-[520px] flex-col border-l border-white/10 focus:outline-none"
+			class="safe-top safe-bottom bg-drawer text-ink fixed inset-y-0 right-0 z-50 flex w-full max-w-[520px] flex-col border-l border-white/10 focus:outline-none"
 		>
 			<form onsubmit={submit} class="flex h-full min-h-0 flex-col">
-				<div class="flex items-start justify-between border-b border-white/8 px-[22px] pt-5 pb-4">
+				<div class="flex items-start justify-between gap-4 border-b border-white/8 px-4 pt-5 pb-4 sm:px-[22px]">
 					<div class="flex flex-col gap-[5px]">
 						<Dialog.Title class="text-[17px] leading-[1.1] font-semibold tracking-[-0.2px]">
 							Fork sandbox
@@ -109,7 +109,7 @@ function submit(event: SubmitEvent) {
 					</Dialog.Close>
 				</div>
 
-				<div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-[22px] py-5">
+				<div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-5 sm:px-[22px]">
 					<label class="flex flex-col gap-2">
 						<span class="text-label text-[11.5px] font-medium">Name</span>
 						<input
@@ -178,7 +178,7 @@ function submit(event: SubmitEvent) {
 								</span>
 							{/if}
 						</div>
-						<div class="grid grid-cols-4 gap-[7px]">
+						<div class="grid grid-cols-2 gap-[7px] sm:grid-cols-4">
 							{#each gpuOptions as option (option)}
 								<button
 									type="button"
@@ -236,7 +236,7 @@ function submit(event: SubmitEvent) {
 					{/if}
 				</div>
 
-				<div class="flex items-center justify-end gap-2 border-t border-white/8 px-[22px] py-[14px]">
+				<div class="flex items-center justify-end gap-2 border-t border-white/8 px-4 py-[14px] sm:px-[22px]">
 					<Dialog.Close
 						type="button"
 						class="text-control cursor-pointer rounded-[7px] border border-white/12 px-[14px] py-[10px] text-[12.5px] font-medium hover:bg-white/5"

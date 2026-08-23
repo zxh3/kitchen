@@ -101,10 +101,10 @@ function specProblem(spec: SandboxSpec): string | null {
 	<Dialog.Portal>
 		<Dialog.Overlay class="fixed inset-0 z-40 bg-black/50" />
 		<Dialog.Content
-			class="bg-drawer text-ink fixed inset-y-0 right-0 z-50 flex w-full max-w-[520px] flex-col border-l border-white/10 focus:outline-none"
+			class="safe-top safe-bottom bg-drawer text-ink fixed inset-y-0 right-0 z-50 flex w-full max-w-[520px] flex-col border-l border-white/10 focus:outline-none"
 		>
 			<form onsubmit={create} class="flex h-full min-h-0 flex-col">
-				<div class="flex items-start justify-between border-b border-white/8 px-[22px] pt-5 pb-4">
+				<div class="flex items-start justify-between gap-4 border-b border-white/8 px-4 pt-5 pb-4 sm:px-[22px]">
 					<div class="flex flex-col gap-[5px]">
 						<Dialog.Title class="text-[17px] leading-[1.1] font-semibold tracking-[-0.2px]">
 							Create sandbox
@@ -122,7 +122,7 @@ function specProblem(spec: SandboxSpec): string | null {
 					</Dialog.Close>
 				</div>
 
-				<div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-[22px] py-5">
+				<div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-5 sm:px-[22px]">
 					<label class="flex flex-col gap-2">
 						<span class="text-label text-[11.5px] font-medium">Name</span>
 						<div class="flex items-center gap-2">
@@ -213,7 +213,7 @@ function specProblem(spec: SandboxSpec): string | null {
 								</span>
 							{/if}
 						</div>
-						<div class="grid grid-cols-4 gap-[7px]">
+						<div class="grid grid-cols-2 gap-[7px] sm:grid-cols-4">
 							{#each gpuOptions as option (option)}
 								<button
 									type="button"
@@ -276,21 +276,21 @@ function specProblem(spec: SandboxSpec): string | null {
 							continuously, shared live between sandboxes, or kept out of snapshots.
 						</span>
 						{#each volumes as volume, i (i)}
-							<div class="flex items-center gap-2">
+							<div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex">
 								<input
 									bind:value={volume.name}
 									autocomplete="off"
 									spellcheck="false"
 									placeholder="datasets"
-									class="focus:border-accent/45 w-0 flex-1 rounded-[7px] border border-white/10 bg-white/2 px-3 py-[10px] font-mono text-xs focus:outline-none"
+									class="focus:border-accent/45 min-w-0 flex-1 rounded-[7px] border border-white/10 bg-white/2 px-3 py-[10px] font-mono text-xs focus:outline-none"
 								/>
-								<span class="text-muted font-mono text-xs">→</span>
+								<span class="text-muted hidden font-mono text-xs sm:inline">→</span>
 								<input
 									bind:value={volume.mount}
 									autocomplete="off"
 									spellcheck="false"
 									placeholder="/mnt/datasets"
-									class="focus:border-accent/45 w-0 flex-[1.4] rounded-[7px] border border-white/10 bg-white/2 px-3 py-[10px] font-mono text-xs focus:outline-none"
+									class="focus:border-accent/45 col-start-1 row-start-2 min-w-0 flex-[1.4] rounded-[7px] border border-white/10 bg-white/2 px-3 py-[10px] font-mono text-xs focus:outline-none sm:col-auto sm:row-auto"
 								/>
 								<button
 									type="button"
@@ -299,7 +299,7 @@ function specProblem(spec: SandboxSpec): string | null {
 										volumes.splice(i, 1);
 										if (volumes.length === 0) volumes.push({ name: "", mount: "" });
 									}}
-									class="text-faint hover:text-control flex size-[26px] flex-none cursor-pointer items-center justify-center rounded-[5px] border border-white/10 text-xs hover:bg-white/5"
+									class="text-faint hover:text-control col-start-2 row-start-1 row-end-3 flex size-10 flex-none cursor-pointer items-center justify-center rounded-[7px] border border-white/10 text-xs hover:bg-white/5 sm:col-auto sm:row-auto sm:size-[26px] sm:rounded-[5px]"
 								>
 									✕
 								</button>
@@ -326,7 +326,7 @@ function specProblem(spec: SandboxSpec): string | null {
 					{/if}
 				</div>
 
-				<div class="flex items-center justify-end gap-2 border-t border-white/8 px-[22px] py-[14px]">
+				<div class="flex items-center justify-end gap-2 border-t border-white/8 px-4 py-[14px] sm:px-[22px]">
 					<Dialog.Close
 						type="button"
 						class="text-control cursor-pointer rounded-[7px] border border-white/12 px-[14px] py-[10px] text-[12.5px] font-medium hover:bg-white/5"

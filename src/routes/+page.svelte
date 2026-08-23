@@ -269,16 +269,15 @@ function elapsed(since: string): string {
     : `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, "0")}s`;
 }
 
-const gridCols = "grid-cols-[1.6fr_0.8fr_1.1fr_0.8fr_150px]";
 </script>
 
 <svelte:head>
 	<title>kitchen</title>
 </svelte:head>
 
-<div class="flex min-h-screen flex-col">
+<div class="flex min-h-dvh flex-col">
 	<!-- Top bar -->
-	<header class="flex h-[50px] flex-none items-center gap-4 border-b border-white/8 px-[22px]">
+	<header class="safe-top flex min-h-[50px] flex-none items-center gap-3 border-b border-white/8 px-4 sm:gap-4 sm:px-[22px]">
 		<a href="/"><Logo size={16} /></a>
 		<div class="flex-1"></div>
 		{#if data.connection}
@@ -287,7 +286,7 @@ const gridCols = "grid-cols-[1.6fr_0.8fr_1.1fr_0.8fr_150px]";
 				target="_blank"
 				rel="noreferrer"
 				title="Open this workspace in Modal"
-				class="text-secondary hover:text-control flex items-center gap-[7px] font-mono text-[11.5px]"
+				class="text-secondary hover:text-control hidden items-center gap-[7px] font-mono text-[11.5px] sm:flex"
 			>
 				<span class="bg-running size-[5px] rounded-full"></span>
 				{data.connection.workspace}{data.connection.environment
@@ -300,26 +299,27 @@ const gridCols = "grid-cols-[1.6fr_0.8fr_1.1fr_0.8fr_150px]";
 			type="button"
 			onclick={() => (palette.open = true)}
 			title="Search sandboxes and actions"
-			class="text-secondary hover:text-control flex cursor-pointer items-center gap-[7px]
-				rounded-md border border-white/12 py-[4px] pr-[6px] pl-[9px] text-[11.5px] leading-none"
+			class="text-secondary hover:text-control flex size-9 cursor-pointer items-center justify-center gap-[7px]
+				rounded-md border border-white/12 text-[11.5px] leading-none sm:h-auto sm:w-auto sm:justify-start sm:py-[4px] sm:pr-[6px] sm:pl-[9px]"
 		>
-			Search
-			<kbd class="text-faint font-mono text-[10px]">{displayKeys(PALETTE_KEY)}</kbd>
+			<span class="sm:hidden" aria-hidden="true">⌕</span>
+			<span class="hidden sm:inline">Search</span>
+			<kbd class="text-faint hidden font-mono text-[10px] sm:inline">{displayKeys(PALETTE_KEY)}</kbd>
 		</button>
 		<button
 			type="button"
 			onclick={() => (shortcutsPanel.open = true)}
 			title="Keyboard shortcuts (?)"
 			aria-label="Keyboard shortcuts"
-			class="text-secondary hover:text-control flex size-[22px] cursor-pointer items-center justify-center rounded border border-white/12 font-mono text-[11px]"
+			class="text-secondary hover:text-control hidden size-[22px] cursor-pointer items-center justify-center rounded border border-white/12 font-mono text-[11px] sm:flex"
 		>
 			?
 		</button>
-		<a href="/connect" class="text-secondary hover:text-control text-xs">Settings</a>
+		<a href="/connect" class="text-secondary hover:text-control flex min-h-9 items-center text-xs">Settings</a>
 	</header>
 
 	<!-- Page header -->
-	<div class="flex items-end justify-between px-[22px] pt-[22px] pb-4">
+	<div class="flex items-end justify-between px-4 pt-5 pb-4 sm:px-[22px] sm:pt-[22px]">
 		<h1 class="text-[19px] leading-[1.1] font-semibold tracking-[-0.3px]">Sandboxes</h1>
 		<div class="flex items-center gap-2">
 			<button
@@ -343,7 +343,7 @@ const gridCols = "grid-cols-[1.6fr_0.8fr_1.1fr_0.8fr_150px]";
 	</div>
 
 	{#if actionError}
-		<div class="px-[22px] pb-3">
+		<div class="px-4 pb-3 sm:px-[22px]">
 			<div
 				class="border-failed/28 bg-failed/6 flex items-center gap-[9px] rounded-lg border px-[13px] py-[11px]"
 			>
@@ -381,7 +381,7 @@ const gridCols = "grid-cols-[1.6fr_0.8fr_1.1fr_0.8fr_150px]";
 		</div>
 	{:else}
 		<!-- Column headers -->
-		<div class="grid {gridCols} section-label gap-4 border-b border-white/8 px-[22px] pb-2">
+		<div class="section-label hidden grid-cols-[1.6fr_0.8fr_1.1fr_0.8fr_150px] gap-4 border-b border-white/8 px-[22px] pb-2 sm:grid">
 			<div>SANDBOX</div>
 			<div>STATUS</div>
 			<div>RESOURCES</div>
@@ -393,10 +393,10 @@ const gridCols = "grid-cols-[1.6fr_0.8fr_1.1fr_0.8fr_150px]";
 			{@const sb = row.kind === 'running' ? row.sb : null}
 			{@const spec = row.kind === 'running' ? row.sb : row.spec}
 			<div
-				class="grid {gridCols} items-center gap-4 border-b border-white/6 px-[22px] py-[14px]
+				class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 border-b border-white/6 px-4 py-4 sm:grid-cols-[1.6fr_0.8fr_1.1fr_0.8fr_150px] sm:gap-4 sm:px-[22px] sm:py-[14px]
 					{row.kind === 'stopped' ? 'opacity-72' : ''}"
 			>
-				<div class="flex min-w-0 flex-col gap-1">
+				<div class="col-start-1 row-start-1 flex min-w-0 flex-col gap-1 sm:col-auto sm:row-auto">
 					<span class="flex min-w-0 items-center gap-[7px]">
 						<span class="truncate font-mono text-[13.5px] leading-none font-semibold">
 							{spec.name}
@@ -460,26 +460,26 @@ const gridCols = "grid-cols-[1.6fr_0.8fr_1.1fr_0.8fr_150px]";
 				<!-- Status -->
 				{#if row.kind === 'running'}
 					{#if row.stopping || busy[spec.name]}
-						<span class="flex items-center gap-[7px] text-[11.5px] leading-none text-[#d9b169]">
+						<span class="col-start-1 row-start-2 flex items-center gap-[7px] text-[11.5px] leading-none text-[#d9b169] sm:col-auto sm:row-auto">
 							<span class="size-[5px] animate-pulse rounded-full bg-[#d9b169]"></span>
 							Stopping…
 						</span>
 					{:else}
-						<StatusDot status="running" />
+						<div class="col-start-1 row-start-2 sm:col-auto sm:row-auto"><StatusDot status="running" /></div>
 					{/if}
 				{:else if row.kind === 'creating'}
-					<span class="text-accent flex items-center gap-[7px] text-[11.5px] leading-none">
+					<span class="text-accent col-start-1 row-start-2 flex items-center gap-[7px] text-[11.5px] leading-none sm:col-auto sm:row-auto">
 						<span class="bg-accent size-[5px] animate-pulse rounded-full"></span>
 						{phaseLabel(spec.name, row.phase)}
 					</span>
 				{:else if row.kind === 'failed'}
-					<StatusDot status="failed" />
+					<div class="col-start-1 row-start-2 sm:col-auto sm:row-auto"><StatusDot status="failed" /></div>
 				{:else}
-					<StatusDot status="stopped" />
+					<div class="col-start-1 row-start-2 sm:col-auto sm:row-auto"><StatusDot status="stopped" /></div>
 				{/if}
 
-				<div class="text-data truncate font-mono text-xs">{formatResources(spec)}</div>
-				<div class="text-data font-mono text-xs">
+				<div class="text-data col-start-1 row-start-3 truncate font-mono text-xs sm:col-auto sm:row-auto">{formatResources(spec)}</div>
+				<div class="text-data hidden font-mono text-xs sm:block">
 					{#if row.kind === 'running'}
 						{formatUptime(row.sb.createdAt, now)}
 					{:else if row.kind === 'creating'}
@@ -490,7 +490,7 @@ const gridCols = "grid-cols-[1.6fr_0.8fr_1.1fr_0.8fr_150px]";
 				</div>
 
 				<!-- Actions -->
-				<div class="flex items-center justify-end gap-[6px]">
+				<div class="col-start-2 row-start-1 row-end-4 flex items-center justify-end gap-2 sm:col-auto sm:row-auto sm:gap-[6px]">
 					{#if row.kind === 'running' && sb}
 						<!--
 							One click, and it lands in zsh. A sandbox has four panes, but
@@ -507,15 +507,15 @@ const gridCols = "grid-cols-[1.6fr_0.8fr_1.1fr_0.8fr_150px]";
 								entering = null;
 							}}
 							title="Open this sandbox — starts in zsh, switch panes inside"
-							class="text-ink cursor-pointer rounded-[5px] border border-white/14 px-[11px] py-[6px]
-								text-[11.5px] leading-none font-medium hover:bg-white/5 disabled:opacity-60"
+							class="text-ink min-h-10 cursor-pointer rounded-[7px] border border-white/14 px-3 py-[6px]
+								text-[11.5px] leading-none font-medium hover:bg-white/5 disabled:opacity-60 sm:min-h-0 sm:rounded-[5px] sm:px-[11px]"
 						>
 							{entering === sb.name ? 'Opening…' : 'Enter'}
 						</button>
 
 						<DropdownMenu.Root>
 							<DropdownMenu.Trigger
-								class="text-body flex size-[26px] cursor-pointer items-center justify-center rounded-[5px] border border-white/12 text-xs hover:bg-white/5"
+								class="text-body flex size-10 cursor-pointer items-center justify-center rounded-[7px] border border-white/12 text-xs hover:bg-white/5 sm:size-[26px] sm:rounded-[5px]"
 								aria-label="More actions"
 							>
 								⋯
@@ -586,7 +586,7 @@ const gridCols = "grid-cols-[1.6fr_0.8fr_1.1fr_0.8fr_150px]";
 							type="button"
 							onclick={() => dismissPending(spec.name)}
 							title="Stop tracking this launch. If the sandbox does come up it appears here as running — nothing is cancelled by dismissing."
-							class="text-body cursor-pointer rounded-[5px] border border-white/12 px-[9px] py-[6px] text-[11.5px] leading-none font-medium hover:bg-white/5"
+							class="text-body min-h-10 cursor-pointer rounded-[7px] border border-white/12 px-3 py-[6px] text-[11.5px] leading-none font-medium hover:bg-white/5 sm:min-h-0 sm:rounded-[5px] sm:px-[9px]"
 						>
 							Dismiss
 						</button>
@@ -600,7 +600,7 @@ const gridCols = "grid-cols-[1.6fr_0.8fr_1.1fr_0.8fr_150px]";
 								disabled={Boolean(busy[spec.name])}
 								aria-busy={Boolean(busy[spec.name])}
 								title="Launch {spec.name} as a new machine from {spec.image}. Its saved state is already gone."
-								class="text-control cursor-pointer rounded-[5px] border border-white/14 px-[11px] py-[6px] text-[11.5px] leading-none font-medium hover:bg-white/5 disabled:opacity-60"
+								class="text-control min-h-10 cursor-pointer rounded-[7px] border border-white/14 px-3 py-[6px] text-[11.5px] leading-none font-medium hover:bg-white/5 disabled:opacity-60 sm:min-h-0 sm:rounded-[5px] sm:px-[11px]"
 							>
 								{busy[spec.name] ?? 'Start fresh'}
 							</button>
@@ -610,14 +610,14 @@ const gridCols = "grid-cols-[1.6fr_0.8fr_1.1fr_0.8fr_150px]";
 								onclick={() => startLaunch(spec)}
 								disabled={Boolean(busy[spec.name])}
 								aria-busy={Boolean(busy[spec.name])}
-								class="text-control cursor-pointer rounded-[5px] border border-white/14 px-[11px] py-[6px] text-[11.5px] leading-none font-medium hover:bg-white/5 disabled:opacity-60"
+								class="text-control min-h-10 cursor-pointer rounded-[7px] border border-white/14 px-3 py-[6px] text-[11.5px] leading-none font-medium hover:bg-white/5 disabled:opacity-60 sm:min-h-0 sm:rounded-[5px] sm:px-[11px]"
 							>
 								{busy[spec.name] ?? (row.kind === 'failed' ? 'Retry' : 'Start')}
 							</button>
 						{/if}
 						<DropdownMenu.Root>
 							<DropdownMenu.Trigger
-								class="text-body flex size-[26px] cursor-pointer items-center justify-center rounded-[5px] border border-white/12 text-xs hover:bg-white/5"
+								class="text-body flex size-10 cursor-pointer items-center justify-center rounded-[7px] border border-white/12 text-xs hover:bg-white/5 sm:size-[26px] sm:rounded-[5px]"
 								aria-label="More actions"
 							>
 								⋯
