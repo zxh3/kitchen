@@ -1,7 +1,6 @@
-// Injected into ttyd's page (via --index, see bootScript). Turns image
-// pastes and file drops in any terminal pane into files in the sandbox:
-// the upload daemon saves them and types the path into the herdr pane.
-// Text pastes are untouched - they belong to xterm.
+// Injected into ttyd's page (via --index, see bootScript). Adds the small
+// pieces of browser-terminal behavior that ttyd's bundled xterm.js lacks:
+// modified Enter reporting, plus image paste/drop support.
 //
 // Listeners MUST use the capture phase (the true argument): xterm's own
 // paste handler (xterm.js Clipboard.ts, handlePasteEvent) runs on its
@@ -9,6 +8,40 @@
 // up here never see a paste at all. Capture runs top-down, before that.
 (function () {
   "use strict";
+
+  // xterm.js 5.5 collapses Enter and Shift+Enter to the same CR byte. Agent
+  // TUIs therefore see both as submit. Forward the standard CSI-u sequence
+  // ourselves so Codex, pi, and any other compatible TUI can distinguish it.
+  // ttyd publishes its Terminal as window.term, but this script can execute
+  // before the React terminal component mounts, hence the short-lived poll.
+  function installShiftEnter() {
+    var term = window.term;
+    if (!term || typeof term.attachCustomKeyEventHandler !== "function") {
+      return false;
+    }
+    term.attachCustomKeyEventHandler(function (event) {
+      if (
+        event.type === "keydown" &&
+        event.key === "Enter" &&
+        event.shiftKey &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey
+      ) {
+        term.input("\x1b[13;2u", false);
+        return false;
+      }
+      return true;
+    });
+    return true;
+  }
+
+  if (!installShiftEnter()) {
+    var shiftEnterTimer = setInterval(function () {
+      if (installShiftEnter()) clearInterval(shiftEnterTimer);
+    }, 50);
+  }
+
   function toast(msg) {
     var d = document.createElement("div");
     d.textContent = msg;

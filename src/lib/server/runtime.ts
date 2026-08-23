@@ -254,6 +254,10 @@ export HISTFILE=/root/.zsh_history
 export HISTSIZE=10000
 export SAVEHIST=10000
 setopt share_history
+# The browser terminal reports Shift+Enter as CSI-u so agent TUIs can use it
+# for a newline. At an ordinary zsh prompt it should retain Enter's traditional
+# accept-line behavior instead of leaving an unbound escape sequence behind.
+bindkey $'\e[13;2u' accept-line
 if [ -z "\$KITCHEN_MOTD_SHOWN" ]; then
 	export KITCHEN_MOTD_SHOWN=1
 	printf '\e[90mthe whole machine is saved when you stop $KITCHEN_SANDBOX_NAME - packages, config, /workspace, all of it.\ntype \e[0mkitchen\e[90m for details.\e[0m\n'
