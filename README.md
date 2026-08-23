@@ -1,42 +1,62 @@
-# sv
+# Kitchen
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Kitchen is a browser control plane for persistent development sandboxes on
+[Modal](https://modal.com). Each sandbox includes:
 
-## Creating a project
+- zsh
+- herdr with Codex, Claude Code, and pi
+- code-server
+- an application preview for port 3000
+- whole-filesystem snapshots, restores, and forks
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Development
 
-```sh
-# create a new project
-npx sv create my-app
-```
-
-To recreate this project with the same configuration:
-
-```sh
-# recreate this project
-npx sv@0.17.0 create --template minimal --types ts --no-install apps/kitchen
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+Requires Node.js 22, npm, and a Modal API token.
 
 ```sh
+npm install
 npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
 ```
 
-## Building
-
-To create a production version of your app:
+Connect your Modal token in the browser. It remains in browser `localStorage`
+and is sent only with API requests. To use server credentials instead:
 
 ```sh
+cp .env.example .env
+npm run dev
+```
+
+Checks:
+
+```sh
+npm run check
 npm run build
 ```
 
-You can preview the production build with `npm run preview`.
+## Deployment
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+Requires Python 3.12 and the Modal CLI:
+
+```sh
+modal deploy deploy.py
+```
+
+## Persistence
+
+Stopping with save snapshots the sandbox's filesystem, including `/workspace`,
+installed tools, settings, and logins. Processes do not survive restore.
+Volumes persist separately and are not part of snapshots.
+
+Sandboxes have a 24-hour maximum runtime. Save important work before then or
+use a volume.
+
+## Architecture
+
+The SvelteKit server is stateless; Modal is the source of truth. Each sandbox
+runs ttyd for zsh and herdr, code-server, Caddy authentication, and a proxy to
+the application on port 3000.
+
+Runtime setup lives in `src/lib/server/runtime.ts`. Terminal browser behavior
+lives in `src/lib/server/terminal-client`.
+
+See [terminal image-paste design notes](docs/pane-image-paste.md).
