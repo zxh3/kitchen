@@ -330,7 +330,12 @@ cat > /etc/kitchen/kitchen-paste.js <<'PASTEJS'
 // Injected into ttyd's page (via --index, see bootScript). Turns image
 // pastes and file drops in any terminal pane into files in the sandbox:
 // the upload daemon saves them and types the path into the herdr pane.
-// Text pastes are untouched — they belong to xterm.
+// Text pastes are untouched - they belong to xterm.
+//
+// Listeners MUST use the capture phase (the true argument): xterm's own
+// paste handler (xterm.js Clipboard.ts, handlePasteEvent) runs on its
+// hidden textarea and calls stopPropagation(), so bubble-phase listeners
+// up here never see a paste at all. Capture runs top-down, before that.
 (function () {
   "use strict";
   function toast(msg) {
@@ -378,24 +383,38 @@ cat > /etc/kitchen/kitchen-paste.js <<'PASTEJS'
         toast("upload failed: " + e);
       });
   }
-  window.addEventListener("paste", function (e) {
-    var files = e.clipboardData && e.clipboardData.files;
-    if (!files || !files.length) return; // text paste: xterm's business
-    e.preventDefault();
-    e.stopPropagation();
-    upload(files[0]);
-  });
-  window.addEventListener("dragover", function (e) {
-    if (!e.dataTransfer || !e.dataTransfer.types) return;
-    if (e.dataTransfer.types.indexOf("Files") >= 0) e.preventDefault();
-  });
-  window.addEventListener("drop", function (e) {
-    var files = e.dataTransfer && e.dataTransfer.files;
-    if (!files || !files.length) return;
-    e.preventDefault();
-    e.stopPropagation();
-    upload(files[0]);
-  });
+  // capture=true: xterm stopPropagation()s paste at its textarea; without
+  // capture we never run at all (this file's whole reason to exist).
+  window.addEventListener(
+    "paste",
+    function (e) {
+      var files = e.clipboardData && e.clipboardData.files;
+      if (!files || !files.length) return; // text paste: xterm's business
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      upload(files[0]);
+    },
+    true,
+  );
+  window.addEventListener(
+    "dragover",
+    function (e) {
+      if (!e.dataTransfer || !e.dataTransfer.types) return;
+      if (e.dataTransfer.types.indexOf("Files") >= 0) e.preventDefault();
+    },
+    true,
+  );
+  window.addEventListener(
+    "drop",
+    function (e) {
+      var files = e.dataTransfer && e.dataTransfer.files;
+      if (!files || !files.length) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      upload(files[0]);
+    },
+    true,
+  );
 })();
 PASTEJS
 cat > /etc/kitchen/upload-server.js <<'UPLOADJS'
