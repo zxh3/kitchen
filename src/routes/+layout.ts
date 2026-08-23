@@ -11,8 +11,11 @@ export const ssr = false;
 export const load: LayoutLoad = async ({ url, fetch }) => {
   // Settings has to stay reachable even when the credentials are wrong — it is
   // where they get fixed — so failures there resolve to "no connection"
-  // instead of redirecting.
-  const isSettings = url.pathname.startsWith("/connect");
+  // instead of redirecting. The dev-only /browser tab (a shared,
+  // agent-driven browser) gets the same exemption: it needs no credentials.
+  const isSettings =
+    url.pathname.startsWith("/connect") ||
+    url.pathname.startsWith("/browser");
   const stored = loadCredentials();
   if (stored) {
     return {

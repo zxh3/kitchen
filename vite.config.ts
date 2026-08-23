@@ -2,9 +2,12 @@ import adapter from "@sveltejs/adapter-node";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
+import { browserStream } from "./vite.browser-stream.mjs";
 
 export default defineConfig({
   plugins: [
+    // Dev-only shared-browser bridge: WS /browser/ws <-> CDP screencast+input.
+    browserStream(),
     tailwindcss(),
     sveltekit({
       compilerOptions: {

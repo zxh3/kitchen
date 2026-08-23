@@ -16,10 +16,13 @@
     "@sveltejs/adapter-node": "^5.5.7",
     "@sveltejs/kit": "^2.63.0",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@types/ws": "^8.18.1",
+    "playwright-core": "^1.62.1",
     "svelte": "^5.56.1",
     "svelte-check": "^4.6.0",
     "typescript": "^6.0.3",
-    "vite": "^8.0.16"
+    "vite": "^8.0.16",
+    "ws": "^8.21.3"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
