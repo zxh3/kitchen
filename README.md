@@ -41,6 +41,10 @@ Requires Python 3.12 and the Modal CLI:
 modal deploy deploy.py
 ```
 
+The web server routes and runs in `us-west` with 8 CPUs, 32 GiB RAM, and one
+warm container. These defaults favor responsive development over scale-to-zero
+cost savings. Regional compute carries Modal's region-selection multiplier.
+
 ## Persistence
 
 Stopping with save snapshots the sandbox's filesystem, including `/workspace`,
