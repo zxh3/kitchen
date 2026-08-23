@@ -333,6 +333,7 @@ export async function launchSandbox(
   options: LaunchOptions = {},
 ): Promise<{ sandboxId: string }> {
   const client = clientFor(creds);
+  const kctx = await kitchen();
   try {
     const app = await client.apps.fromName(APP_NAME, {
       createIfMissing: true,
@@ -379,6 +380,10 @@ export async function launchSandbox(
             ? { "kitchen-forked-from": options.forkedFrom }
             : {}),
         },
+      });
+      kctx.emit("sandbox/started", {
+        name: spec.name,
+        sandboxId: sandbox.sandboxId,
       });
       return { sandboxId: sandbox.sandboxId };
     };
@@ -471,6 +476,7 @@ export async function stopSandbox(
   onPhase: (phase: OpPhase) => void = () => {},
 ): Promise<{ snapshot: Snapshot | null }> {
   const client = clientFor(creds);
+  const kctx = await kitchen();
   try {
     let sandbox: Sandbox;
     try {
@@ -498,6 +504,8 @@ export async function stopSandbox(
 
     onPhase("stopping");
     await sandbox.terminate();
+    // A discarded sandbox never had its tags read; the Modal id stands in.
+    kctx.emit("sandbox/stopped", { name: name ?? sandboxId, sandboxId });
     return { snapshot };
   } catch (e) {
     if (e instanceof NotFoundError || e instanceof InvalidError) {

@@ -18,7 +18,25 @@
 
 import { Context } from "cordis";
 import { modePlugins } from "$lib/modes";
+import { Activity } from "./activity";
 import { SessionModes } from "./registry";
+
+declare module "cordis" {
+  interface Events {
+    /**
+     * A sandbox came up (fresh or resumed from snapshot). Emitted once the
+     * Modal create call has returned.
+     * @param e - name and Modal id of the new sandbox.
+     */
+    "sandbox/started"(e: { name: string; sandboxId: string }): void;
+    /**
+     * A sandbox stopped after a successful terminate request — whether or
+     * not its state was snapshotted first.
+     * @param e - Modal id, and the kitchen name when it was already known.
+     */
+    "sandbox/stopped"(e: { name: string; sandboxId: string }): void;
+  }
+}
 
 async function boot(): Promise<Context> {
   const root = new Context();
@@ -28,6 +46,7 @@ async function boot(): Promise<Context> {
   for (const plugin of modePlugins) {
     await root.plugin(plugin);
   }
+  await root.plugin(Activity);
   return root;
 }
 
