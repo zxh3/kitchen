@@ -58,16 +58,16 @@ const GH_VERSION = "2.98.0";
 
 import { readFileSync } from "node:fs";
 
-// Pane-paste payloads (pane-paste/*) ship as base64: the boot script decodes
-// them into /etc/kitchen. Real files instead of heredocs, so they get syntax
-// highlighting and node --check, and base64's alphabet makes the String.raw
-// boot script's no-backtick/no-${ constraint satisfiable by construction.
+// Terminal-client payloads (terminal-client/*) ship as base64: the boot script
+// decodes them into /etc/kitchen. Real files instead of heredocs, so they get
+// syntax highlighting and node --check, and base64's alphabet satisfies the
+// String.raw boot script's no-backtick/no-${ constraint.
 // cwd is the repo root in dev and in the deployed server (deploy.py ships ./src).
-const panePasteClientB64 = Buffer.from(
-  readFileSync("src/lib/server/pane-paste/paste.mjs", "utf8"),
+const terminalClientB64 = Buffer.from(
+  readFileSync("src/lib/server/terminal-client/client.mjs", "utf8"),
 ).toString("base64");
 const uploadServerB64 = Buffer.from(
-  readFileSync("src/lib/server/pane-paste/upload-server.cjs", "utf8"),
+  readFileSync("src/lib/server/terminal-client/upload-server.cjs", "utf8"),
 ).toString("base64");
 
 import { modePorts, WORKSPACE_DIR } from "$lib/types";
@@ -254,6 +254,10 @@ export HISTFILE=/root/.zsh_history
 export HISTSIZE=10000
 export SAVEHIST=10000
 setopt share_history
+# The browser terminal reports Shift+Enter as CSI-u so agent TUIs can use it
+# for a newline. At an ordinary zsh prompt it should retain Enter's traditional
+# accept-line behavior instead of leaving an unbound escape sequence behind.
+bindkey $'\e[13;2u' accept-line
 if [ -z "\$KITCHEN_MOTD_SHOWN" ]; then
 	export KITCHEN_MOTD_SHOWN=1
 	printf '\e[90mthe whole machine is saved when you stop $KITCHEN_SANDBOX_NAME - packages, config, /workspace, all of it.\ntype \e[0mkitchen\e[90m for details.\e[0m\n'
@@ -279,15 +283,15 @@ cat > /tmp/Caddyfile <<CADDYEOF
 		header Cookie *kitchen=$KITCHEN_SECRET*
 	}
 	handle @authed {
-		# screenshot paste: the patched ttyd index loads paste.js from here
-		# and POSTs clipboard/dropped images to the upload daemon; args[1]
+		# the patched ttyd index loads Kitchen's terminal client from here and
+		# POSTs clipboard/dropped images to the upload daemon; args[1]
 		# tells the daemon which pane type the page belongs to.
 		handle /kitchen-upload {
 			reverse_proxy 127.0.0.1:17009 {
 				header_up X-Kitchen-Pane {args[1]}
 			}
 		}
-		handle /kitchen-paste.js {
+		handle /kitchen-terminal.js {
 			root * /etc/kitchen
 			file_server
 		}
@@ -334,17 +338,17 @@ cat > /tmp/Caddyfile <<CADDYEOF
 }
 CADDYEOF
 
-# --- screenshot paste for terminal panes (docs/pane-image-paste.md) ---
+# --- browser client for terminal panes (docs/pane-image-paste.md) ---
 # Image paste can never travel over a terminal websocket (terminals are
 # text), so a script injected into ttyd's page turns clipboard/drop events
 # into an HTTP upload; the daemon saves the file and types its path into
 # the herdr pane. The path IS the agent interface. Payloads are authored
-# under pane-paste/ and inlined above as base64.
+# under terminal-client/ and inlined above as base64.
 mkdir -p /etc/kitchen /tmp/kitchen-shots
-printf %s '${panePasteClientB64}' | base64 -d > /etc/kitchen/kitchen-paste.js
+printf %s '${terminalClientB64}' | base64 -d > /etc/kitchen/kitchen-terminal.js
 printf %s '${uploadServerB64}' | base64 -d > /etc/kitchen/upload-server.js
-# ttyd's frontend is one self-contained html; patch a copy with the paste
-# script and serve it via ttyd -I. Generated from a throwaway stock
+# ttyd's frontend is one self-contained html; patch a copy with the terminal
+# client and serve it via ttyd -I. Generated from a throwaway stock
 # instance at boot: any failure removes the file, INDEX_ARG below stays
 # empty, and panes serve the stock page — this feature can never take
 # the terminals down.
@@ -355,8 +359,8 @@ for i in 1 2 3 4 5; do
 done
 kill $tmp_ttyd 2>/dev/null
 if [ -s /tmp/ttyd-stock.html ]; then
-  awk '{ sub(/<\/body>/, "<script src=\"/kitchen-paste.js\"></script></body>") } { print }' /tmp/ttyd-stock.html > /etc/kitchen/ttyd-index.html
-  grep -q kitchen-paste.js /etc/kitchen/ttyd-index.html || rm -f /etc/kitchen/ttyd-index.html
+  awk '{ sub(/<\/body>/, "<script src=\"/kitchen-terminal.js\"></script></body>") } { print }' /tmp/ttyd-stock.html > /etc/kitchen/ttyd-index.html
+  grep -q kitchen-terminal.js /etc/kitchen/ttyd-index.html || rm -f /etc/kitchen/ttyd-index.html
 fi
 
 cd /workspace

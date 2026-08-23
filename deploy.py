@@ -15,6 +15,9 @@ import subprocess
 import modal
 
 PORT = 3000
+SERVER_REGION = "us-west"
+SERVER_CPU = 8.0
+SERVER_MEMORY_MIB = 32768
 
 app = modal.App("kitchen")
 
@@ -43,12 +46,20 @@ image = (
     image=image,
     port=PORT,
     unauthenticated=True,
-    routing_region="us-east",
+    # Keep request routing and compute together for predictable west-coast
+    # development latency. Explicit resources give the always-warm server
+    # headroom for concurrent development traffic.
+    routing_region=SERVER_REGION,
+    compute_region=SERVER_REGION,
+    cpu=SERVER_CPU,
+    memory=SERVER_MEMORY_MIB,
     min_containers=1,
     scaledown_window=300,
     startup_timeout=30,
 )
-class KitchenServer:
+# A routing region cannot change on an already-deployed Modal Function. The
+# new identity lets the next deploy create this server in us-west cleanly.
+class KitchenServerWest:
     @modal.enter()
     def start(self) -> None:
         self.process = subprocess.Popen(
