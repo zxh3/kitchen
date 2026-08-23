@@ -57,9 +57,7 @@ image = (
     scaledown_window=300,
     startup_timeout=30,
 )
-# A routing region cannot change on an already-deployed Modal Function. The
-# new identity lets the next deploy create this server in us-west cleanly.
-class KitchenServerWest:
+class KitchenServer:
     @modal.enter()
     def start(self) -> None:
         self.process = subprocess.Popen(
