@@ -33,3 +33,9 @@ node --check src/lib/server/terminal-client/upload-server.cjs
 - Never log or persist Modal token secrets.
 - Keep long operations streamed with visible progress.
 - Use existing Svelte 5 rune patterns and shared types.
+
+## Git
+
+- Use Conventional Commits: `type(scope): description`.
+- Treat the PR title as the squash commit message; it must follow the same
+  format.
