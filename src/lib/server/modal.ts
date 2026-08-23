@@ -25,9 +25,9 @@ import {
   type Volume,
 } from "modal";
 import { env } from "$env/dynamic/private";
+import { kitchen } from "$lib/server/context";
 import {
   bootScript,
-  modePorts,
   runtimeCommands,
   runtimePorts,
 } from "$lib/server/runtime";
@@ -46,7 +46,6 @@ import {
   type SessionInfo,
   type Snapshot,
   type StoppedSandbox,
-  sessionModes,
   type VolumeMount,
 } from "$lib/types";
 
@@ -484,9 +483,10 @@ export async function stopSandbox(
     }
 
     let snapshot: Snapshot | null = null;
+    let name: string | null = null;
     if (options.save) {
       const ctx = contextOf(creds, client);
-      const name = (await sandbox.getTags())["kitchen-name"] ?? sandboxId;
+      name = (await sandbox.getTags())["kitchen-name"] ?? sandboxId;
       snapshot = await saveSnapshot(
         ctx,
         sandbox,
@@ -546,11 +546,13 @@ export async function getSession(
 
     const tunnels = await sandbox.tunnels();
     const secret = paneSecret(creds, info.name);
+    // The registered modes decide which panes exist and where they answer.
+    const kctx = await kitchen();
     const paneEntries = await Promise.all(
-      sessionModes.map(async (mode) => {
-        const tunnel = tunnels[modePorts[mode]];
+      kctx.sessionModes.list().map(async (mode) => {
+        const tunnel = tunnels[mode.port];
         const url = `${tunnel.url}/kitchen-auth?token=${secret}`;
-        return [mode, { url, ready: await paneIsReady(url) }] as const;
+        return [mode.id, { url, ready: await paneIsReady(url) }] as const;
       }),
     );
     return {

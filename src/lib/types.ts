@@ -1,7 +1,8 @@
 export type SandboxStatus = "running" | "stopped" | "failed";
 
-export const sessionModes = ["zsh", "herdr", "vscode", "browser"] as const;
-export type SessionMode = (typeof sessionModes)[number];
+// Session modes moved to the cordis registry — see src/lib/modes/*. This
+// type-only import keeps SessionInfo shaped like before.
+import type { SessionMode } from "./modes";
 
 export const cpuOptions = [2, 4, 8, 16, 32] as const;
 export const gpuOptions = [
@@ -41,14 +42,6 @@ export const WORKSPACE_DIR = "/workspace";
  */
 export const maxSandboxNameLength = 32;
 export const sandboxNamePattern = /^[a-z0-9][a-z0-9-]{0,31}$/;
-
-/** Public (tunneled) port per session mode. */
-export const modePorts = {
-  zsh: 7681,
-  herdr: 7683,
-  vscode: 8443,
-  browser: 8080,
-} as const;
 
 export interface SandboxInfo {
   sandboxId: string;

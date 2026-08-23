@@ -12,14 +12,8 @@ import { palette } from "$lib/palette.svelte";
 import { RUNTIME_VERSION } from "$lib/runtimeVersion";
 import { shortcutsPanel } from "$lib/shortcutsPanel.svelte";
 import { visibleSnapshots } from "$lib/snapshots";
-import {
-  modePorts,
-  type OpPhase,
-  opPhaseLabels,
-  type SessionMode,
-  type Snapshot,
-  sessionModes,
-} from "$lib/types";
+import { modePorts, type SessionMode, sessionModes } from "$lib/modes";
+import { type OpPhase, opPhaseLabels, type Snapshot } from "$lib/types";
 import type { PageData } from "./$types";
 
 let { data }: { data: PageData } = $props();
