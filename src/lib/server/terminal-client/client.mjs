@@ -28,6 +28,11 @@
         !event.ctrlKey &&
         !event.metaKey
       ) {
+        // Returning false stops xterm's keydown handler, but xterm returns
+        // before cancelling the DOM event. Without this, the browser can emit
+        // a follow-up keypress that xterm sends as a plain Enter, immediately
+        // submitting the prompt after the newline was inserted.
+        event.preventDefault();
         term.input("\x1b[13;2u", false);
         return false;
       }
