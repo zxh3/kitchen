@@ -32,7 +32,7 @@ const key = (workspace: string) => `kitchen-pending:${workspace}`;
 
 export function loadPending(workspace: string): PendingOps {
   try {
-    const raw = JSON.parse(localStorage.getItem(key(workspace)) ?? "{}");
+    const raw = JSON.parse(sessionStorage.getItem(key(workspace)) ?? "{}");
     const ops: PendingOps = {};
     for (const [name, op] of Object.entries(raw as PendingOps)) {
       if (op?.spec && op.kind) ops[name] = op;
@@ -44,7 +44,7 @@ export function loadPending(workspace: string): PendingOps {
 }
 
 function save(workspace: string, ops: PendingOps): void {
-  localStorage.setItem(key(workspace), JSON.stringify(ops));
+  sessionStorage.setItem(key(workspace), JSON.stringify(ops));
 }
 
 function update(
