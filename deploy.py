@@ -62,13 +62,18 @@ image = (
 class KitchenServer:
     @modal.enter()
     def start(self) -> None:
+        server_env = {
+            **os.environ,
+            "PORT": str(PORT),
+            "HOST": "0.0.0.0",
+            "PATH": "/usr/bin:/usr/local/bin:/bin",
+        }
+        # Modal's Python task runtime points MODAL_SERVER_URL at its private
+        # Unix socket. The child Node process uses the JavaScript SDK, which
+        # must connect to the public control-plane endpoint instead.
+        server_env.pop("MODAL_SERVER_URL", None)
         self.process = subprocess.Popen(
             ["node", "build"],
             cwd="/srv/kitchen",
-            env={
-                **os.environ,
-                "PORT": str(PORT),
-                "HOST": "0.0.0.0",
-                "PATH": "/usr/bin:/usr/local/bin:/bin",
-            },
+            env=server_env,
         )

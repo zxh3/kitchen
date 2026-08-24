@@ -139,6 +139,21 @@ export type VerifyResult =
   | { ok: true; workspace: string }
   | { ok: false; error: string };
 
+function logVerificationError(error: unknown, creds: ModalCredentials): void {
+  let message = error instanceof Error ? error.message : String(error);
+  for (const credential of [creds.tokenId, creds.tokenSecret]) {
+    if (credential) message = message.replaceAll(credential, "[redacted]");
+  }
+  console.error("Modal credential verification failed", {
+    name: error instanceof Error ? error.name : typeof error,
+    code:
+      typeof error === "object" && error && "code" in error
+        ? String(error.code)
+        : undefined,
+    message,
+  });
+}
+
 export async function verifyToken(
   creds: ModalCredentials,
 ): Promise<VerifyResult> {
@@ -163,7 +178,8 @@ export async function verifyToken(
       ok: true,
       workspace: who.username || who.workspaceName || "unknown",
     };
-  } catch {
+  } catch (error) {
+    logVerificationError(error, creds);
     return {
       ok: false,
       error:
