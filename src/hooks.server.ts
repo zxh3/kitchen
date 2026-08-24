@@ -8,6 +8,15 @@ function requestHost(request: Request): string | null {
 }
 
 function hasForeignOrigin(request: Request): boolean {
+  // Fetch Metadata describes the browser-visible request, so prefer it over
+  // host headers that a trusted reverse proxy may rewrite before they reach
+  // the app. Browsers do not allow page scripts to forge Sec-Fetch-* headers.
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite === "same-origin") return false;
+  if (fetchSite === "same-site" || fetchSite === "cross-site") return true;
+
+  // Older browsers and non-browser clients may omit Fetch Metadata. Keep an
+  // Origin check as a fallback for those requests.
   const origin = request.headers.get("origin");
   if (!origin) return false;
   try {
@@ -23,8 +32,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     event.url.pathname.startsWith("/api/") &&
     !SAFE_METHODS.has(event.request.method)
   ) {
-    const fetchSite = event.request.headers.get("sec-fetch-site");
-    if (hasForeignOrigin(event.request) || fetchSite === "cross-site") {
+    if (hasForeignOrigin(event.request)) {
       response = json(
         { error: "Cross-origin request rejected." },
         { status: 403 },
