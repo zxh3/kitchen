@@ -1,5 +1,3 @@
-import { credentialHeaders } from "$lib/creds";
-
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -8,7 +6,7 @@ export class ApiError extends Error {
   }
 }
 
-/** Call a kitchen API endpoint with the browser's Modal credentials attached. */
+/** Call a Kitchen API endpoint using its same-origin HttpOnly session. */
 export async function api<T>(
   path: string,
   init: RequestInit = {},
@@ -16,7 +14,7 @@ export async function api<T>(
 ): Promise<T> {
   const res = await fetchFn(path, {
     ...init,
-    headers: { ...credentialHeaders(), ...(init.headers ?? {}) },
+    credentials: "same-origin",
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {

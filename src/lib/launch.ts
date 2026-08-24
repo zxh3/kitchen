@@ -15,7 +15,6 @@
  */
 
 import { api } from "$lib/api";
-import { credentialHeaders } from "$lib/creds";
 import {
   clearPending,
   markCreating,
@@ -173,7 +172,6 @@ export async function launch(
         fetch("/api/sandboxes", {
           method: "POST",
           headers: {
-            ...credentialHeaders(),
             "content-type": "application/json",
           },
           body: JSON.stringify({
@@ -260,7 +258,6 @@ export async function stop(
     () =>
       fetch(`/api/sandboxes/${sandboxId}?${query}`, {
         method: "DELETE",
-        headers: credentialHeaders(),
       }),
     (phase) => {
       setPhase(workspace, name, phase);
@@ -294,7 +291,6 @@ export async function saveSnapshotNow(
     () =>
       fetch(`/api/sandboxes/${sandboxId}/snapshot?${query}`, {
         method: "POST",
-        headers: credentialHeaders(),
       }),
     onPhase,
     (event) => {
