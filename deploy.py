@@ -1,9 +1,8 @@
 # Deploys kitchen on Modal itself: the SvelteKit Node server runs as a Modal
 # Server (@app.server), so the control plane lives next to the sandboxes it
 # manages. The app stays stateless — browser sessions are encrypted into an
-# HttpOnly cookie. Runtime keys, and optional MODAL_TOKEN_ID /
-# MODAL_TOKEN_SECRET / MODAL_ENVIRONMENT values for single-tenant mode, come
-# from a Modal Secret named "kitchen-deployment-credentials".
+# HttpOnly cookie. The runtime key comes from a Modal Secret named
+# "kitchen-deployment-credentials".
 #
 #   modal deploy apps/kitchen/deploy.py
 #
@@ -68,10 +67,16 @@ class KitchenServer:
             "HOST": "0.0.0.0",
             "PATH": "/usr/bin:/usr/local/bin:/bin",
         }
-        # Modal's Python task runtime points MODAL_SERVER_URL at its private
-        # Unix socket. The child Node process uses the JavaScript SDK, which
-        # must connect to the public control-plane endpoint instead.
-        server_env.pop("MODAL_SERVER_URL", None)
+        # Keep Modal's Python task credentials and private Unix-socket endpoint
+        # out of the child Node process. Kitchen only uses credentials supplied
+        # through its encrypted browser sessions.
+        for key in (
+            "MODAL_SERVER_URL",
+            "MODAL_TOKEN_ID",
+            "MODAL_TOKEN_SECRET",
+            "MODAL_ENVIRONMENT",
+        ):
+            server_env.pop(key, None)
         self.process = subprocess.Popen(
             ["node", "build"],
             cwd="/srv/kitchen",

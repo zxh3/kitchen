@@ -1,10 +1,5 @@
 import { json } from "@sveltejs/kit";
-import {
-  credentialsFrom,
-  credentialSourceFrom,
-  hasServerCredentials,
-  verifyToken,
-} from "$lib/server/modal";
+import { credentialsFrom, verifyToken } from "$lib/server/modal";
 import type { RequestHandler } from "./$types";
 
 /** Verify the credentials represented by the sealed browser session. */
@@ -12,10 +7,7 @@ export const GET: RequestHandler = async ({ request }) => {
   const creds = credentialsFrom(request);
   if (!creds) {
     return json(
-      {
-        error: "No authenticated Modal connection.",
-        serverCredentials: hasServerCredentials(),
-      },
+      { error: "No authenticated Modal connection." },
       { status: 401 },
     );
   }
@@ -24,7 +16,5 @@ export const GET: RequestHandler = async ({ request }) => {
   return json({
     workspace: result.workspace,
     environment: creds.environment ?? null,
-    source: credentialSourceFrom(request),
-    serverCredentials: hasServerCredentials(),
   });
 };

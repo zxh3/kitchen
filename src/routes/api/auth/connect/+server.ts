@@ -1,7 +1,6 @@
 import { json } from "@sveltejs/kit";
-import { hasServerCredentials, verifyToken } from "$lib/server/modal";
+import { verifyToken } from "$lib/server/modal";
 import {
-  serverAccessAllowed,
   SessionConfigurationError,
   setCredentialSession,
 } from "$lib/server/session";
@@ -19,12 +18,11 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     return json({ error: "Expected a JSON request body." }, { status: 400 });
   }
 
-  const accessToken = input(body.accessToken);
   const tokenId = input(body.tokenId);
   const tokenSecret = input(body.tokenSecret);
   const environment = input(body.environment);
   if (
-    [accessToken, tokenId, tokenSecret, environment].some(
+    [tokenId, tokenSecret, environment].some(
       (value) => value.length > MAX_INPUT_LENGTH,
     )
   ) {
@@ -32,14 +30,6 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
   }
 
   try {
-    if (accessToken) {
-      if (!hasServerCredentials() || !serverAccessAllowed(accessToken)) {
-        return json({ error: "Invalid deployment access key." }, { status: 401 });
-      }
-      setCredentialSession(cookies, { kind: "server" });
-      return json({ connected: true });
-    }
-
     if (!tokenId || !tokenSecret) {
       return json(
         { error: "Enter both halves of a Modal token." },
