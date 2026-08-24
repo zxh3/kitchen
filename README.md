@@ -18,8 +18,10 @@ npm install
 npm run dev
 ```
 
-Connect your Modal token in the browser. It remains in browser `localStorage`
-and is sent only with API requests. To use server credentials instead:
+Connect your Modal token in the browser. Kitchen verifies it once, then keeps
+it in an authenticated-encrypted, `HttpOnly` cookie that page scripts cannot
+read. Development uses an ephemeral encryption key unless `.env` provides a
+stable one:
 
 ```sh
 cp .env.example .env
@@ -38,8 +40,16 @@ npm run build
 Requires Python 3.12 and the Modal CLI:
 
 ```sh
+modal secret create kitchen-deployment-credentials \
+  KITCHEN_SESSION_SECRET="$(openssl rand -hex 32)"
 modal deploy deploy.py
 ```
+
+For a private single-tenant deployment, add `MODAL_TOKEN_ID`,
+`MODAL_TOKEN_SECRET`, optional `MODAL_ENVIRONMENT`, and a separate random
+`KITCHEN_ACCESS_TOKEN` to that secret. Visitors must enter the Kitchen access
+key before the deployment credentials are used; exposing the site no longer
+implicitly exposes the Modal token's authority.
 
 The web server routes and runs in `us-west` with 8 CPUs, 32 GiB RAM, and one
 warm container. These defaults favor responsive development over scale-to-zero
@@ -56,7 +66,8 @@ use a volume.
 
 ## Architecture
 
-The SvelteKit server is stateless; Modal is the source of truth. Each sandbox
+The SvelteKit server is stateless; sealed browser sessions require no database,
+and Modal is the source of truth. Each sandbox
 runs ttyd for zsh and herdr, code-server, Caddy authentication, and a proxy to
 the application on port 3000.
 

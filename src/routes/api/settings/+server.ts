@@ -10,7 +10,7 @@ import type { RequestHandler } from "./$types";
 
 /**
  * Workspace settings, kept where every browser can see them rather than in one
- * browser's localStorage. Today that is the retention for new automatic
+ * browser's local state. Today that is the retention for new automatic
  * snapshots — a policy two people should not be able to disagree about.
  */
 export const GET: RequestHandler = async ({ request }) => {

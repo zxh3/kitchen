@@ -7,6 +7,22 @@ export default defineConfig({
   plugins: [
     tailwindcss(),
     sveltekit({
+      csp: {
+        directives: {
+          "default-src": ["self"],
+          "script-src": ["self"],
+          "script-src-attr": ["none"],
+          "style-src": ["self", "unsafe-inline", "https://fonts.googleapis.com"],
+          "font-src": ["self", "https://fonts.gstatic.com"],
+          "img-src": ["self", "data:", "blob:"],
+          "connect-src": ["self"],
+          "frame-src": ["https:"],
+          "object-src": ["none"],
+          "base-uri": ["none"],
+          "form-action": ["self"],
+          "frame-ancestors": ["none"],
+        },
+      },
       compilerOptions: {
         // Force runes mode for the project, except for libraries. Can be removed in svelte 6.
         runes: ({ filename }) =>

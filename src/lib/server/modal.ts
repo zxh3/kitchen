@@ -1,10 +1,10 @@
 /**
  * Modal control-plane boundary — stateless.
  *
- * There is no database and no server-side session: every request carries the
- * user's Modal credentials (x-modal-* headers, filled from the browser's
- * localStorage), or the server falls back to MODAL_TOKEN_ID /
- * MODAL_TOKEN_SECRET / MODAL_ENVIRONMENT env vars (deployment mode).
+ * There is no database or server-side session store. Browser credentials are
+ * carried in an authenticated-encrypted HttpOnly cookie. Deployment
+ * credentials are used only by a session authenticated with the separate
+ * KITCHEN_ACCESS_TOKEN.
  *
  * Modal is the single source of truth: the sandbox list is
  * `sandboxes.list()` filtered by the `kitchen` tag, the spec (image, cpu,
@@ -25,6 +25,7 @@ import {
   type Volume,
 } from "modal";
 import { env } from "$env/dynamic/private";
+import { credentialSessionFrom } from "$lib/server/session";
 import {
   bootScript,
   modePorts,
@@ -60,19 +61,36 @@ export interface ModalCredentials {
   environment?: string;
 }
 
-/** Credentials from request headers, else server env vars, else null. */
+/** Credentials from the sealed browser session, else null. */
 export function credentialsFrom(request: Request): ModalCredentials | null {
-  const tokenId = request.headers.get("x-modal-token-id");
-  const tokenSecret = request.headers.get("x-modal-token-secret");
-  const environment = request.headers.get("x-modal-environment") ?? undefined;
-  if (tokenId && tokenSecret) return { tokenId, tokenSecret, environment };
-  if (env.MODAL_TOKEN_ID && env.MODAL_TOKEN_SECRET) {
+  const session = credentialSessionFrom(request);
+  if (session?.kind === "modal") {
+    return {
+      tokenId: session.tokenId,
+      tokenSecret: session.tokenSecret,
+      environment: session.environment,
+    };
+  }
+  if (
+    session?.kind === "server" &&
+    env.MODAL_TOKEN_ID &&
+    env.MODAL_TOKEN_SECRET
+  ) {
     return {
       tokenId: env.MODAL_TOKEN_ID,
       tokenSecret: env.MODAL_TOKEN_SECRET,
       environment: env.MODAL_ENVIRONMENT || undefined,
     };
   }
+  return null;
+}
+
+export function credentialSourceFrom(
+  request: Request,
+): "browser" | "server" | null {
+  const session = credentialSessionFrom(request);
+  if (session?.kind === "modal") return "browser";
+  if (session?.kind === "server" && hasServerCredentials()) return "server";
   return null;
 }
 

@@ -1,15 +1,16 @@
 # Deploys kitchen on Modal itself: the SvelteKit Node server runs as a Modal
 # Server (@app.server), so the control plane lives next to the sandboxes it
-# manages. The app stays stateless — users bring their own Modal token via
-# the browser (localStorage), or set MODAL_TOKEN_ID / MODAL_TOKEN_SECRET /
-# MODAL_ENVIRONMENT as a Modal Secret named "kitchen-deployment-credentials"
-# for single-tenant deployment mode.
+# manages. The app stays stateless — browser sessions are encrypted into an
+# HttpOnly cookie. Runtime keys, and optional MODAL_TOKEN_ID /
+# MODAL_TOKEN_SECRET / MODAL_ENVIRONMENT values for single-tenant mode, come
+# from a Modal Secret named "kitchen-deployment-credentials".
 #
 #   modal deploy apps/kitchen/deploy.py
 #
 # Custom domain (kitchen.dev): add it to this server in the Modal dashboard
 # (Settings → Domains) and point DNS at Modal per the instructions there.
 
+import os
 import subprocess
 
 import modal
@@ -46,6 +47,7 @@ image = (
     image=image,
     port=PORT,
     unauthenticated=True,
+    secrets=[modal.Secret.from_name("kitchen-deployment-credentials")],
     # Keep request routing and compute together for predictable west-coast
     # development latency. Explicit resources give the always-warm server
     # headroom for concurrent development traffic.
@@ -63,5 +65,10 @@ class KitchenServer:
         self.process = subprocess.Popen(
             ["node", "build"],
             cwd="/srv/kitchen",
-            env={"PORT": str(PORT), "HOST": "0.0.0.0", "PATH": "/usr/bin:/usr/local/bin:/bin"},
+            env={
+                **os.environ,
+                "PORT": str(PORT),
+                "HOST": "0.0.0.0",
+                "PATH": "/usr/bin:/usr/local/bin:/bin",
+            },
         )
