@@ -3,7 +3,6 @@ import {
   createDecipheriv,
   createHash,
   randomBytes,
-  timingSafeEqual,
 } from "node:crypto";
 import { dev } from "$app/environment";
 import { env } from "$env/dynamic/private";
@@ -17,9 +16,7 @@ const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 const MAX_CREDENTIAL_LENGTH = 512;
 const devKey = randomBytes(32);
 
-export type CredentialSession =
-  | ({ kind: "modal" } & ModalCredentials)
-  | { kind: "server" };
+export type CredentialSession = { kind: "modal" } & ModalCredentials;
 
 interface SessionEnvelope {
   expiresAt: number;
@@ -86,12 +83,6 @@ function validModalSession(
   );
 }
 
-function validSession(value: unknown): value is CredentialSession {
-  if (!value || typeof value !== "object") return false;
-  const session = value as Record<string, unknown>;
-  return session.kind === "server" || validModalSession(value);
-}
-
 function seal(session: CredentialSession): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", encryptionKey(), iv);
@@ -138,7 +129,7 @@ function open(value: string): CredentialSession | null {
     if (
       typeof envelope.expiresAt !== "number" ||
       envelope.expiresAt <= Date.now() ||
-      !validSession(envelope.session)
+      !validModalSession(envelope.session)
     ) {
       return null;
     }
@@ -171,12 +162,4 @@ export function setCredentialSession(
 export function clearCredentialSession(cookies: Cookies): void {
   cookies.delete(cookieName(), { path: "/" });
   cookies.delete(dev ? PRODUCTION_COOKIE : DEVELOPMENT_COOKIE, { path: "/" });
-}
-
-export function serverAccessAllowed(candidate: string): boolean {
-  const expected = env.KITCHEN_ACCESS_TOKEN;
-  if (!expected || !candidate) return false;
-  const expectedHash = createHash("sha256").update(expected).digest();
-  const candidateHash = createHash("sha256").update(candidate).digest();
-  return timingSafeEqual(expectedHash, candidateHash);
 }

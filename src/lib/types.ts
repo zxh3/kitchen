@@ -181,5 +181,4 @@ export const defaultRetentionDays: RetentionDays = 30;
 export interface ConnectionInfo {
   workspace: string;
   environment: string | null;
-  source: "browser" | "server";
 }

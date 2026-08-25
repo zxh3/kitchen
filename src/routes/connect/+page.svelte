@@ -10,12 +10,11 @@ import {
   retentionOptions,
 } from "$lib/types";
 
-/** Where the credentials in force actually come from, and which env they use. */
+/** The workspace and environment currently connected in this browser. */
 const active = $derived(page.data.connection as ConnectionInfo | null);
 let tokenId = $state("");
 let tokenSecret = $state("");
 let environment = $state("");
-let accessToken = $state("");
 let submitting = $state(false);
 let error = $state<string | null>(null);
 
@@ -42,30 +41,11 @@ async function connectModal(event: SubmitEvent) {
   }
 }
 
-async function connectDeployment() {
-  submitting = true;
-  error = null;
-  try {
-    await api("/api/auth/connect", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ accessToken }),
-    });
-    accessToken = "";
-    await goto("/", { invalidateAll: true });
-  } catch (e) {
-    error = e instanceof ApiError ? e.message : String(e);
-  } finally {
-    submitting = false;
-  }
-}
-
 async function disconnect() {
   await api("/api/auth/disconnect", { method: "DELETE" });
   tokenId = "";
   tokenSecret = "";
   environment = "";
-  accessToken = "";
   await invalidateAll();
 }
 
@@ -206,9 +186,8 @@ async function setRetention(days: RetentionDays) {
 					{active.workspace}{active.environment ? ` / ${active.environment}` : ' / (workspace default)'}
 				</span>
 				<span class="text-muted text-[11px] leading-[1.6]">
-					{active.source === 'server'
-						? 'Credentials come from this deployment, not from your browser. Sandboxes, volumes and snapshots all live in the environment above. Entering a token below would use your own Modal account in this browser instead.'
-						: 'Credentials from this browser. Sandboxes, volumes and snapshots all live in the environment above.'}
+					Credentials from this browser. Sandboxes, volumes and snapshots all live in the
+					environment above.
 				</span>
 			</div>
 		{/if}
@@ -218,38 +197,6 @@ async function setRetention(days: RetentionDays) {
 			read them, and the server keeps no credential database. The session expires after seven
 			days.
 		</p>
-
-		<details class="border-t border-white/8 pt-5">
-			<summary class="text-label cursor-pointer text-[11.5px] font-medium">
-				Use deployment credentials
-			</summary>
-			<div class="mt-4 flex flex-col gap-3">
-				<p class="text-muted text-[11px] leading-[1.6] text-pretty">
-					For a private deployment configured with server-side Modal credentials, enter its
-					separate Kitchen access key.
-				</p>
-				<label class="flex flex-col gap-2">
-					<span class="text-label text-[11.5px] font-medium">Deployment access key</span>
-					<input
-						bind:value={accessToken}
-						type="password"
-						autocomplete="current-password"
-						placeholder="Kitchen access key"
-						class="focus:border-accent/45 rounded-[7px] border border-white/10 bg-white/2 px-3 py-[10px]
-							font-mono text-[12.5px] focus:bg-white/3 focus:outline-none"
-					/>
-				</label>
-				<button
-					type="button"
-					disabled={submitting || !accessToken}
-					onclick={() => void connectDeployment()}
-					class="text-control w-fit cursor-pointer rounded-[7px] border border-white/12 px-[14px] py-[10px]
-						text-[12.5px] font-medium hover:bg-white/5 disabled:opacity-60"
-				>
-					{submitting ? 'Verifying…' : 'Use deployment'}
-				</button>
-			</div>
-		</details>
 
 		<div class="flex flex-col gap-[9px] border-t border-white/8 pt-5">
 			<span class="text-label flex items-center gap-[7px] text-[11.5px] font-medium">

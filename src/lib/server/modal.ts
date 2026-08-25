@@ -2,9 +2,7 @@
  * Modal control-plane boundary — stateless.
  *
  * There is no database or server-side session store. Browser credentials are
- * carried in an authenticated-encrypted HttpOnly cookie. Deployment
- * credentials are used only by a session authenticated with the separate
- * KITCHEN_ACCESS_TOKEN.
+ * carried in an authenticated-encrypted HttpOnly cookie.
  *
  * Modal is the single source of truth: the sandbox list is
  * `sandboxes.list()` filtered by the `kitchen` tag, the spec (image, cpu,
@@ -24,7 +22,6 @@ import {
   type Sandbox,
   type Volume,
 } from "modal";
-import { env } from "$env/dynamic/private";
 import { credentialSessionFrom } from "$lib/server/session";
 import {
   bootScript,
@@ -64,39 +61,14 @@ export interface ModalCredentials {
 /** Credentials from the sealed browser session, else null. */
 export function credentialsFrom(request: Request): ModalCredentials | null {
   const session = credentialSessionFrom(request);
-  if (session?.kind === "modal") {
+  if (session) {
     return {
       tokenId: session.tokenId,
       tokenSecret: session.tokenSecret,
       environment: session.environment,
     };
   }
-  if (
-    session?.kind === "server" &&
-    env.MODAL_TOKEN_ID &&
-    env.MODAL_TOKEN_SECRET
-  ) {
-    return {
-      tokenId: env.MODAL_TOKEN_ID,
-      tokenSecret: env.MODAL_TOKEN_SECRET,
-      environment: env.MODAL_ENVIRONMENT || undefined,
-    };
-  }
   return null;
-}
-
-export function credentialSourceFrom(
-  request: Request,
-): "browser" | "server" | null {
-  const session = credentialSessionFrom(request);
-  if (session?.kind === "modal") return "browser";
-  if (session?.kind === "server" && hasServerCredentials()) return "server";
-  return null;
-}
-
-/** Does the server itself carry credentials (deployment mode)? */
-export function hasServerCredentials(): boolean {
-  return Boolean(env.MODAL_TOKEN_ID && env.MODAL_TOKEN_SECRET);
 }
 
 /**
@@ -139,6 +111,21 @@ export type VerifyResult =
   | { ok: true; workspace: string }
   | { ok: false; error: string };
 
+function logVerificationError(error: unknown, creds: ModalCredentials): void {
+  let message = error instanceof Error ? error.message : String(error);
+  for (const credential of [creds.tokenId, creds.tokenSecret]) {
+    if (credential) message = message.replaceAll(credential, "[redacted]");
+  }
+  console.error("Modal credential verification failed", {
+    name: error instanceof Error ? error.name : typeof error,
+    code:
+      typeof error === "object" && error && "code" in error
+        ? String(error.code)
+        : undefined,
+    message,
+  });
+}
+
 export async function verifyToken(
   creds: ModalCredentials,
 ): Promise<VerifyResult> {
@@ -163,7 +150,8 @@ export async function verifyToken(
       ok: true,
       workspace: who.username || who.workspaceName || "unknown",
     };
-  } catch {
+  } catch (error) {
+    logVerificationError(error, creds);
     return {
       ok: false,
       error:

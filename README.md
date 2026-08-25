@@ -46,12 +46,6 @@ modal secret create kitchen-deployment-credentials \
 modal deploy deploy.py
 ```
 
-For a private single-tenant deployment, add `MODAL_TOKEN_ID`,
-`MODAL_TOKEN_SECRET`, optional `MODAL_ENVIRONMENT`, and a separate random
-`KITCHEN_ACCESS_TOKEN` to that secret. Visitors must enter the Kitchen access
-key before the deployment credentials are used; exposing the site no longer
-implicitly exposes the Modal token's authority.
-
 The web server routes and runs in `us-west` with 8 CPUs, 32 GiB RAM, and one
 warm container. These defaults favor responsive development over scale-to-zero
 cost savings. Regional compute carries Modal's region-selection multiplier.
