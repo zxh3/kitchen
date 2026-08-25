@@ -50,7 +50,7 @@ const HERDR_SHA256 = "fe5d3009003113731bfe1e7a72b356acaf2d6e35aee952aa68ecb4fd63
  *
  * Mirrored in $lib/runtimeVersion.ts for the client; keep the two in step.
  */
-export const RUNTIME_VERSION = 6;
+export const RUNTIME_VERSION = 7;
 const CODE_SERVER_VERSION = "4.133.0";
 const UV_VERSION = "0.12.5";
 const CADDY_VERSION = "2.11.4";
@@ -78,7 +78,9 @@ export const runtimePorts = Object.values(modePorts);
 export { WORKSPACE_DIR };
 
 export const runtimeCommands = [
-  "RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl ca-certificates git && rm -rf /var/lib/apt/lists/*",
+  // Baseline command-line tools available in every sandbox. Neovim provides
+  // the familiar Vim editing model under the `nvim` command.
+  "RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl ca-certificates git neovim && rm -rf /var/lib/apt/lists/*",
   `RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential cmake libjson-c-dev libwebsockets-dev && curl -fsSL https://github.com/tsl0922/ttyd/archive/${TTYD_COMMIT}.tar.gz | tar -xz -C /tmp && cmake -S /tmp/ttyd-${TTYD_COMMIT} -B /tmp/ttyd-build && make -C /tmp/ttyd-build -j"$(nproc)" install && rm -rf /tmp/ttyd-${TTYD_COMMIT} /tmp/ttyd-build /var/lib/apt/lists/*`,
   `RUN curl -fsSL https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_amd64.tar.gz | tar -xz -C /usr/local/bin caddy`,
   `RUN curl -fsSL https://code-server.dev/install.sh | sh -s -- --method=standalone --version=${CODE_SERVER_VERSION}`,
