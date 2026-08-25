@@ -4,6 +4,7 @@ Kitchen is a browser control plane for persistent development sandboxes on
 [Modal](https://modal.com). Each sandbox includes:
 
 - zsh
+- Neovim (`nvim`)
 - herdr with Codex, Claude Code, and pi
 - code-server
 - an application preview for port 3000
